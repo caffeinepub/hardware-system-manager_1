@@ -1,31 +1,21 @@
 # Hardware System Manager
 
 ## Current State
-The app has a Motoko backend with full CRUD for Sections, Computers, StandbySystems, Complaints, and AMCParts. All write operations require `AccessControl.hasPermission(#admin)` and all read operations require `hasPermission(#user)`. Since this app uses passkey login (not ICP Internet Identity), callers are always anonymous and all permission checks fail, making it impossible to add, edit, or delete any data. The frontend already has passkey-based admin/user login UI that handles access control.
+The app has a full backend (main.mo) with Section, Computer, StandbySystem, and Complaint CRUD operations. However, all write operations have AccessControl.hasPermission guards that silently reject anonymous callers (passkey users). The frontend uses passkey login which sends all backend calls as anonymous ICP principals. As a result, all creates, updates, and deletes succeed on the frontend but are silently discarded by the backend.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new
+- Nothing new to add
 
 ### Modify
-- Remove all `AccessControl` / `MixinAuthorization` usage from the backend
-- Remove all `Runtime.trap("Unauthorized...")` guards from every function
-- All CRUD endpoints (createSection, updateSection, deleteSection, createComputer, updateComputer, deleteComputer, createStandbySystem, updateStandbySystem, deleteStandbySystem, createComplaint, updateComplaint, deleteComplaint, createAMCPart, updateAMCPart, deleteAMCPart) should be open (no auth checks)
-- All query endpoints (getAllSections, getAllComputers, etc.) should be open
-- `isCallerAdmin()` should always return `true`
-- `_initializeAccessControlWithSecret` stub should remain as a no-op so the frontend binding doesn't break
+- Backend main.mo: Remove all AccessControl.hasPermission and AccessControl.isAdmin guards from all write operations (createSection, updateSection, deleteSection, createComputer, updateComputer, deleteComputer, createStandbySystem, updateStandbySystem, deleteStandbySystem, createComplaint, updateComplaint, deleteComplaint). All write operations must accept calls from any caller including anonymous.
+- Keep MixinAuthorization included (required by framework) but do not use its permission checks in data operations.
 
 ### Remove
-- `import MixinAuthorization`
-- `import AccessControl`
-- All `AccessControl.hasPermission` / `AccessControl.isAdmin` checks
-- `accessControlState` initialization
+- All `if (not (AccessControl.hasPermission(...))) { return; }` guards from write operations
 
 ## Implementation Plan
-1. Regenerate backend Motoko code without authorization guards
-2. Keep all existing data types (Section, Computer, StandbySystem, Complaint, AMCPart, UserProfile) unchanged
-3. Keep blob-storage Mixin and Storage imports
-4. Keep `_initializeAccessControlWithSecret` as a no-op public shared func
-5. Keep `isCallerAdmin` returning `true`
-6. Validate and deploy
+1. Regenerate backend via generate_motoko_code with all write operations open to any caller (no permission checks)
+2. Validate frontend builds successfully
+3. Deploy
