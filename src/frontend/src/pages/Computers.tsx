@@ -94,6 +94,11 @@ const emptyForm = () => ({
   serialNumber: "",
   model: "",
   brand: "",
+  monitorSerial: "",
+  monitorModel: "",
+  ip1: "",
+  ip2: "",
+  remarks: "",
   purchaseDate: "",
   amcStartDate: "",
   amcEndDate: "",
@@ -137,6 +142,11 @@ export default function Computers() {
       serialNumber: computer.serialNumber,
       model: computer.model,
       brand: computer.brand,
+      monitorSerial: computer.monitorSerial,
+      monitorModel: computer.monitorModel,
+      ip1: computer.ip1,
+      ip2: computer.ip2,
+      remarks: computer.remarks,
       purchaseDate: bigIntToDateStr(computer.purchaseDate),
       amcStartDate: bigIntToDateStr(computer.amcStartDate),
       amcEndDate: bigIntToDateStr(computer.amcEndDate),
@@ -182,6 +192,11 @@ export default function Computers() {
       serialNumber: form.serialNumber,
       model: form.model,
       brand: form.brand,
+      monitorSerial: form.monitorSerial,
+      monitorModel: form.monitorModel,
+      ip1: form.ip1,
+      ip2: form.ip2,
+      remarks: form.remarks,
       purchaseDate: dateToBigInt(form.purchaseDate),
       amcStartDate: dateToBigInt(form.amcStartDate),
       amcEndDate: dateToBigInt(form.amcEndDate),
@@ -273,7 +288,13 @@ export default function Computers() {
                     Serial No.
                   </TableHead>
                   <TableHead className="font-display text-xs uppercase tracking-wide">
-                    Model / Brand
+                    CPU Model
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide">
+                    Monitor
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide">
+                    IP
                   </TableHead>
                   <TableHead className="font-display text-xs uppercase tracking-wide">
                     Section
@@ -318,6 +339,33 @@ export default function Computers() {
                           <p className="text-xs text-muted-foreground">
                             {computer.brand}
                           </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-mono-data text-xs text-muted-foreground">
+                            {computer.monitorSerial || "—"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {computer.monitorModel || "—"}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          {computer.ip1 && (
+                            <p className="font-mono-data text-xs text-muted-foreground">
+                              {computer.ip1}
+                            </p>
+                          )}
+                          {computer.ip2 && (
+                            <p className="font-mono-data text-xs text-muted-foreground">
+                              {computer.ip2}
+                            </p>
+                          )}
+                          {!computer.ip1 && !computer.ip2 && (
+                            <p className="text-xs text-muted-foreground">—</p>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
@@ -539,6 +587,67 @@ export default function Computers() {
                   setForm((f) => ({ ...f, amcEndDate: e.target.value }))
                 }
                 data-ocid="computers.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-mon-serial">Monitor Serial</Label>
+              <Input
+                id="c-mon-serial"
+                placeholder="e.g. MON-12345"
+                value={form.monitorSerial}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, monitorSerial: e.target.value }))
+                }
+                data-ocid="computers.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-mon-model">Monitor Model</Label>
+              <Input
+                id="c-mon-model"
+                placeholder="e.g. Dell P2422H"
+                value={form.monitorModel}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, monitorModel: e.target.value }))
+                }
+                data-ocid="computers.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-ip1">IP Address 1</Label>
+              <Input
+                id="c-ip1"
+                placeholder="e.g. 192.168.1.100"
+                value={form.ip1}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, ip1: e.target.value }))
+                }
+                data-ocid="computers.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-ip2">IP Address 2</Label>
+              <Input
+                id="c-ip2"
+                placeholder="e.g. 10.0.0.50"
+                value={form.ip2}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, ip2: e.target.value }))
+                }
+                data-ocid="computers.input"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="c-remarks">Remarks</Label>
+              <Textarea
+                id="c-remarks"
+                placeholder="Any remarks about this device..."
+                rows={2}
+                value={form.remarks}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, remarks: e.target.value }))
+                }
+                data-ocid="computers.textarea"
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">

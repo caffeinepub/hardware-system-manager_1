@@ -53,6 +53,10 @@ function SeatCard({ computer }: { computer: Computer }) {
       <sub className="text-xs text-muted-foreground mt-0.5 leading-tight block not-italic">
         {computer.currentUser || "Unassigned"}
       </sub>
+      <p className="text-[10px] text-muted-foreground mt-1 leading-tight font-mono-data">
+        CPU: {computer.serialNumber || "—"} | MON:{" "}
+        {computer.monitorSerial || "—"}
+      </p>
     </div>
   );
 }

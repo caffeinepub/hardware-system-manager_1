@@ -58,9 +58,12 @@ export interface Section {
 }
 export interface Computer {
     id: string;
+    ip1: string;
+    ip2: string;
     status: Variant_active_standby_retired;
     model: string;
     datasheetBlob?: ExternalBlob;
+    monitorModel: string;
     purchaseDate: bigint;
     createdAt: bigint;
     currentUser: string;
@@ -70,7 +73,9 @@ export interface Computer {
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
+    remarks: string;
     seatNumber: string;
+    monitorSerial: string;
 }
 export interface UserProfile {
     name: string;

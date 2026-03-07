@@ -59,6 +59,8 @@ export const Complaint = IDL.Record({
 export const ExternalBlob = IDL.Vec(IDL.Nat8);
 export const Computer = IDL.Record({
   'id' : IDL.Text,
+  'ip1' : IDL.Text,
+  'ip2' : IDL.Text,
   'status' : IDL.Variant({
     'active' : IDL.Null,
     'standby' : IDL.Null,
@@ -66,6 +68,7 @@ export const Computer = IDL.Record({
   }),
   'model' : IDL.Text,
   'datasheetBlob' : IDL.Opt(ExternalBlob),
+  'monitorModel' : IDL.Text,
   'purchaseDate' : IDL.Int,
   'createdAt' : IDL.Int,
   'currentUser' : IDL.Text,
@@ -75,7 +78,9 @@ export const Computer = IDL.Record({
   'brand' : IDL.Text,
   'amcEndDate' : IDL.Int,
   'amcStartDate' : IDL.Int,
+  'remarks' : IDL.Text,
   'seatNumber' : IDL.Text,
+  'monitorSerial' : IDL.Text,
 });
 export const Section = IDL.Record({
   'id' : IDL.Text,
@@ -273,6 +278,8 @@ export const idlFactory = ({ IDL }) => {
   const ExternalBlob = IDL.Vec(IDL.Nat8);
   const Computer = IDL.Record({
     'id' : IDL.Text,
+    'ip1' : IDL.Text,
+    'ip2' : IDL.Text,
     'status' : IDL.Variant({
       'active' : IDL.Null,
       'standby' : IDL.Null,
@@ -280,6 +287,7 @@ export const idlFactory = ({ IDL }) => {
     }),
     'model' : IDL.Text,
     'datasheetBlob' : IDL.Opt(ExternalBlob),
+    'monitorModel' : IDL.Text,
     'purchaseDate' : IDL.Int,
     'createdAt' : IDL.Int,
     'currentUser' : IDL.Text,
@@ -289,7 +297,9 @@ export const idlFactory = ({ IDL }) => {
     'brand' : IDL.Text,
     'amcEndDate' : IDL.Int,
     'amcStartDate' : IDL.Int,
+    'remarks' : IDL.Text,
     'seatNumber' : IDL.Text,
+    'monitorSerial' : IDL.Text,
   });
   const Section = IDL.Record({
     'id' : IDL.Text,

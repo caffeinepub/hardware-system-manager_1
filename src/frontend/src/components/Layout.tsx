@@ -7,6 +7,7 @@ import {
   BarChart3,
   Building2,
   ChevronRight,
+  Database,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -14,6 +15,7 @@ import {
   Package,
   Server,
   ShieldCheck,
+  Upload,
   User,
   X,
 } from "lucide-react";
@@ -28,6 +30,8 @@ const navItems = [
   { path: "/complaints", label: "Complaints", icon: AlertTriangle },
   { path: "/amc-parts", label: "AMC Parts", icon: Package },
   { path: "/charts", label: "Maintenance Charts", icon: BarChart3 },
+  { path: "/import", label: "Data Import", icon: Upload },
+  { path: "/stock", label: "Stock Data", icon: Database },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

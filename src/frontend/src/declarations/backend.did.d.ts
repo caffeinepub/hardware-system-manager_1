@@ -40,11 +40,14 @@ export interface Complaint {
 }
 export interface Computer {
   'id' : string,
+  'ip1' : string,
+  'ip2' : string,
   'status' : { 'active' : null } |
     { 'standby' : null } |
     { 'retired' : null },
   'model' : string,
   'datasheetBlob' : [] | [ExternalBlob],
+  'monitorModel' : string,
   'purchaseDate' : bigint,
   'createdAt' : bigint,
   'currentUser' : string,
@@ -54,7 +57,9 @@ export interface Computer {
   'brand' : string,
   'amcEndDate' : bigint,
   'amcStartDate' : bigint,
+  'remarks' : string,
   'seatNumber' : string,
+  'monitorSerial' : string,
 }
 export type ExternalBlob = Uint8Array;
 export interface Section {

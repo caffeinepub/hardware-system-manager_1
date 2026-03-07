@@ -140,9 +140,12 @@ export interface Section {
 }
 export interface Computer {
     id: string;
+    ip1: string;
+    ip2: string;
     status: Variant_active_standby_retired;
     model: string;
     datasheetBlob?: ExternalBlob;
+    monitorModel: string;
     purchaseDate: bigint;
     createdAt: bigint;
     currentUser: string;
@@ -152,7 +155,9 @@ export interface Computer {
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
+    remarks: string;
     seatNumber: string;
+    monitorSerial: string;
 }
 export interface UserProfile {
     name: string;
@@ -1024,6 +1029,8 @@ function from_candid_record_n32(_uploadFile: (file: ExternalBlob) => Promise<Uin
 }
 async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: string;
+    ip1: string;
+    ip2: string;
     status: {
         active: null;
     } | {
@@ -1033,6 +1040,7 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
     };
     model: string;
     datasheetBlob: [] | [_ExternalBlob];
+    monitorModel: string;
     purchaseDate: bigint;
     createdAt: bigint;
     currentUser: string;
@@ -1042,12 +1050,17 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
+    remarks: string;
     seatNumber: string;
+    monitorSerial: string;
 }): Promise<{
     id: string;
+    ip1: string;
+    ip2: string;
     status: Variant_active_standby_retired;
     model: string;
     datasheetBlob?: ExternalBlob;
+    monitorModel: string;
     purchaseDate: bigint;
     createdAt: bigint;
     currentUser: string;
@@ -1057,13 +1070,18 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
+    remarks: string;
     seatNumber: string;
+    monitorSerial: string;
 }> {
     return {
         id: value.id,
+        ip1: value.ip1,
+        ip2: value.ip2,
         status: from_candid_variant_n38(_uploadFile, _downloadFile, value.status),
         model: value.model,
         datasheetBlob: record_opt_to_undefined(await from_candid_opt_n39(_uploadFile, _downloadFile, value.datasheetBlob)),
+        monitorModel: value.monitorModel,
         purchaseDate: value.purchaseDate,
         createdAt: value.createdAt,
         currentUser: value.currentUser,
@@ -1073,7 +1091,9 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
         brand: value.brand,
         amcEndDate: value.amcEndDate,
         amcStartDate: value.amcStartDate,
-        seatNumber: value.seatNumber
+        remarks: value.remarks,
+        seatNumber: value.seatNumber,
+        monitorSerial: value.monitorSerial
     };
 }
 function from_candid_record_n43(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -1309,9 +1329,12 @@ function to_candid_record_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8
 }
 async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: string;
+    ip1: string;
+    ip2: string;
     status: Variant_active_standby_retired;
     model: string;
     datasheetBlob?: ExternalBlob;
+    monitorModel: string;
     purchaseDate: bigint;
     createdAt: bigint;
     currentUser: string;
@@ -1321,9 +1344,13 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
+    remarks: string;
     seatNumber: string;
+    monitorSerial: string;
 }): Promise<{
     id: string;
+    ip1: string;
+    ip2: string;
     status: {
         active: null;
     } | {
@@ -1333,6 +1360,7 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
     };
     model: string;
     datasheetBlob: [] | [_ExternalBlob];
+    monitorModel: string;
     purchaseDate: bigint;
     createdAt: bigint;
     currentUser: string;
@@ -1342,13 +1370,18 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
+    remarks: string;
     seatNumber: string;
+    monitorSerial: string;
 }> {
     return {
         id: value.id,
+        ip1: value.ip1,
+        ip2: value.ip2,
         status: to_candid_variant_n18(_uploadFile, _downloadFile, value.status),
         model: value.model,
         datasheetBlob: value.datasheetBlob ? candid_some(await to_candid_ExternalBlob_n19(_uploadFile, _downloadFile, value.datasheetBlob)) : candid_none(),
+        monitorModel: value.monitorModel,
         purchaseDate: value.purchaseDate,
         createdAt: value.createdAt,
         currentUser: value.currentUser,
@@ -1358,7 +1391,9 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
         brand: value.brand,
         amcEndDate: value.amcEndDate,
         amcStartDate: value.amcStartDate,
-        seatNumber: value.seatNumber
+        remarks: value.remarks,
+        seatNumber: value.seatNumber,
+        monitorSerial: value.monitorSerial
     };
 }
 function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {

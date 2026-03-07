@@ -45,6 +45,11 @@ actor {
     datasheetBlob : ?Storage.ExternalBlob;
     notes : Text;
     createdAt : Int;
+    monitorSerial : Text;
+    monitorModel : Text;
+    ip1 : Text;
+    ip2 : Text;
+    remarks : Text;
   };
 
   module Computer {
@@ -149,6 +154,9 @@ actor {
 
   // Section CRUD
   public shared ({ caller }) func createSection(section : Section) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create sections");
+    };
     sections.add(section.id, section);
   };
 
@@ -161,6 +169,9 @@ actor {
   };
 
   public shared ({ caller }) func updateSection(section : Section) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update sections");
+    };
     if (not sections.containsKey(section.id)) {
       return;
     };
@@ -168,6 +179,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteSection(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete sections");
+    };
     if (not sections.containsKey(id)) {
       return;
     };
@@ -176,6 +190,9 @@ actor {
 
   // Computer CRUD
   public shared ({ caller }) func createComputer(computer : Computer) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create computers");
+    };
     computers.add(computer.id, computer);
   };
 
@@ -200,6 +217,9 @@ actor {
   };
 
   public shared ({ caller }) func updateComputer(computer : Computer) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update computers");
+    };
     if (not computers.containsKey(computer.id)) {
       return;
     };
@@ -207,6 +227,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteComputer(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete computers");
+    };
     if (not computers.containsKey(id)) {
       return;
     };
@@ -215,6 +238,9 @@ actor {
 
   // StandbySystem CRUD
   public shared ({ caller }) func createStandbySystem(standbySystem : StandbySystem) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create standby systems");
+    };
     standbySystems.add(standbySystem.id, standbySystem);
   };
 
@@ -227,6 +253,9 @@ actor {
   };
 
   public shared ({ caller }) func updateStandbySystem(standbySystem : StandbySystem) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update standby systems");
+    };
     if (not standbySystems.containsKey(standbySystem.id)) {
       return;
     };
@@ -234,6 +263,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteStandbySystem(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete standby systems");
+    };
     if (not standbySystems.containsKey(id)) {
       return;
     };
@@ -242,6 +274,9 @@ actor {
 
   // Complaint CRUD
   public shared ({ caller }) func createComplaint(complaint : Complaint) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create complaints");
+    };
     complaints.add(complaint.id, complaint);
   };
 
@@ -276,6 +311,9 @@ actor {
   };
 
   public shared ({ caller }) func updateComplaint(complaint : Complaint) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update complaints");
+    };
     if (not complaints.containsKey(complaint.id)) {
       return;
     };
@@ -283,6 +321,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteComplaint(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete complaints");
+    };
     if (not complaints.containsKey(id)) {
       return;
     };
@@ -291,6 +332,9 @@ actor {
 
   // AMCPart CRUD
   public shared ({ caller }) func createAMCPart(part : AMCPart) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create AMC parts");
+    };
     amcParts.add(part.id, part);
   };
 
@@ -314,6 +358,9 @@ actor {
   };
 
   public shared ({ caller }) func updateAMCPart(part : AMCPart) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update AMC parts");
+    };
     if (not amcParts.containsKey(part.id)) {
       return;
     };
@@ -321,6 +368,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteAMCPart(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete AMC parts");
+    };
     if (not amcParts.containsKey(id)) {
       return;
     };

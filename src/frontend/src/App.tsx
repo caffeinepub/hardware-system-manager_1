@@ -15,9 +15,11 @@ import Complaints from "./pages/Complaints";
 import Computers from "./pages/Computers";
 // Pages
 import Dashboard from "./pages/Dashboard";
+import DataImport from "./pages/DataImport";
 import MaintenanceCharts from "./pages/MaintenanceCharts";
 import Sections from "./pages/Sections";
 import StandbySystems from "./pages/StandbySystems";
+import StockData from "./pages/StockData";
 import UserLogin from "./pages/UserLogin";
 
 // Root route with layout
@@ -86,6 +88,18 @@ const userLoginRoute = createRoute({
   component: UserLogin,
 });
 
+const importRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/import",
+  component: DataImport,
+});
+
+const stockRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/stock",
+  component: StockData,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   sectionsRoute,
@@ -96,6 +110,8 @@ const routeTree = rootRoute.addChildren([
   chartsRoute,
   adminRoute,
   userLoginRoute,
+  importRoute,
+  stockRoute,
 ]);
 
 const router = createRouter({ routeTree });
