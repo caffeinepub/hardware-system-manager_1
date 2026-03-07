@@ -46,6 +46,7 @@ export interface Computer {
     { 'standby' : null } |
     { 'retired' : null },
   'model' : string,
+  'amcCompany' : string,
   'datasheetBlob' : [] | [ExternalBlob],
   'monitorModel' : string,
   'purchaseDate' : bigint,
@@ -54,6 +55,7 @@ export interface Computer {
   'sectionId' : string,
   'serialNumber' : string,
   'notes' : string,
+  'companyName' : string,
   'brand' : string,
   'amcEndDate' : bigint,
   'amcStartDate' : bigint,

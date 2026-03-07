@@ -1,18 +1,20 @@
 import Map "mo:core/Map";
-import Int "mo:core/Int";
-import Time "mo:core/Time";
 import Array "mo:core/Array";
+import Int "mo:core/Int";
 import Order "mo:core/Order";
+import Time "mo:core/Time";
 import Principal "mo:core/Principal";
-import Runtime "mo:core/Runtime";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
-import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+import MixinAuthorization "authorization/MixinAuthorization";
 import Migration "migration";
 
 (with migration = Migration.run)
 actor {
+  // Initialize the access control system
+  let accessControlState = AccessControl.initState();
+  include MixinAuthorization(accessControlState);
   include MixinStorage();
 
   // Types
@@ -50,6 +52,8 @@ actor {
     ip1 : Text;
     ip2 : Text;
     remarks : Text;
+    companyName : Text;
+    amcCompany : Text;
   };
 
   module Computer {
@@ -126,28 +130,27 @@ actor {
   let amcParts = Map.empty<Text, AMCPart>();
   let userProfiles = Map.empty<Principal, UserProfile>();
 
-  // Initialize AccessControl
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
+  // Role Management
+  public type UserRole = { #admin; #user; #guest };
 
   // User Profile Management
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
+      return null;
     };
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
     if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
+      return null;
     };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
+      return;
     };
     userProfiles.add(caller, profile);
   };
@@ -155,60 +158,60 @@ actor {
   // Section CRUD
   public shared ({ caller }) func createSection(section : Section) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can create sections");
+      return;
     };
     sections.add(section.id, section);
   };
 
-  public query func getSection(id : Text) : async ?Section {
+  public query ({ caller }) func getSection(id : Text) : async ?Section {
     sections.get(id);
   };
 
-  public query func getAllSections() : async [Section] {
+  public query ({ caller }) func getAllSections() : async [Section] {
     sections.values().toArray().sort();
   };
 
   public shared ({ caller }) func updateSection(section : Section) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update sections");
-    };
-    if (not sections.containsKey(section.id)) {
       return;
     };
-    sections.add(section.id, section);
+    switch (sections.get(section.id)) {
+      case (null) {};
+      case (?_) { sections.add(section.id, section) };
+    };
   };
 
   public shared ({ caller }) func deleteSection(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete sections");
-    };
-    if (not sections.containsKey(id)) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       return;
     };
-    sections.remove(id);
+    switch (sections.get(id)) {
+      case (null) {};
+      case (?_) { sections.remove(id) };
+    };
   };
 
   // Computer CRUD
   public shared ({ caller }) func createComputer(computer : Computer) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can create computers");
+      return;
     };
     computers.add(computer.id, computer);
   };
 
-  public query func getComputer(id : Text) : async ?Computer {
+  public query ({ caller }) func getComputer(id : Text) : async ?Computer {
     computers.get(id);
   };
 
-  public query func getAllComputers() : async [Computer] {
+  public query ({ caller }) func getAllComputers() : async [Computer] {
     computers.values().toArray().sort();
   };
 
-  public query func getComputersBySection(sectionId : Text) : async [Computer] {
+  public query ({ caller }) func getComputersBySection(sectionId : Text) : async [Computer] {
     computers.values().toArray().filter(func(c) { c.sectionId == sectionId });
   };
 
-  public query func getComputersWithExpiringAMC(days : Int) : async [Computer] {
+  public query ({ caller }) func getComputersWithExpiringAMC(days : Int) : async [Computer] {
     let now = Time.now();
     let expiryThreshold = now + (days * 24 * 3600 * 1000000000);
     computers.values().toArray().filter(func(c) {
@@ -218,81 +221,81 @@ actor {
 
   public shared ({ caller }) func updateComputer(computer : Computer) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update computers");
-    };
-    if (not computers.containsKey(computer.id)) {
       return;
     };
-    computers.add(computer.id, computer);
+    switch (computers.get(computer.id)) {
+      case (null) {};
+      case (?_) { computers.add(computer.id, computer) };
+    };
   };
 
   public shared ({ caller }) func deleteComputer(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete computers");
-    };
-    if (not computers.containsKey(id)) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       return;
     };
-    computers.remove(id);
+    switch (computers.get(id)) {
+      case (null) {};
+      case (?_) { computers.remove(id) };
+    };
   };
 
   // StandbySystem CRUD
   public shared ({ caller }) func createStandbySystem(standbySystem : StandbySystem) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can create standby systems");
+      return;
     };
     standbySystems.add(standbySystem.id, standbySystem);
   };
 
-  public query func getStandbySystem(id : Text) : async ?StandbySystem {
+  public query ({ caller }) func getStandbySystem(id : Text) : async ?StandbySystem {
     standbySystems.get(id);
   };
 
-  public query func getAllStandbySystems() : async [StandbySystem] {
+  public query ({ caller }) func getAllStandbySystems() : async [StandbySystem] {
     standbySystems.values().toArray().sort();
   };
 
   public shared ({ caller }) func updateStandbySystem(standbySystem : StandbySystem) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update standby systems");
-    };
-    if (not standbySystems.containsKey(standbySystem.id)) {
       return;
     };
-    standbySystems.add(standbySystem.id, standbySystem);
+    switch (standbySystems.get(standbySystem.id)) {
+      case (null) {};
+      case (?_) { standbySystems.add(standbySystem.id, standbySystem) };
+    };
   };
 
   public shared ({ caller }) func deleteStandbySystem(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete standby systems");
-    };
-    if (not standbySystems.containsKey(id)) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       return;
     };
-    standbySystems.remove(id);
+    switch (standbySystems.get(id)) {
+      case (null) {};
+      case (?_) { standbySystems.remove(id) };
+    };
   };
 
   // Complaint CRUD
   public shared ({ caller }) func createComplaint(complaint : Complaint) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can create complaints");
+      return;
     };
     complaints.add(complaint.id, complaint);
   };
 
-  public query func getComplaint(id : Text) : async ?Complaint {
+  public query ({ caller }) func getComplaint(id : Text) : async ?Complaint {
     complaints.get(id);
   };
 
-  public query func getAllComplaints() : async [Complaint] {
+  public query ({ caller }) func getAllComplaints() : async [Complaint] {
     complaints.values().toArray().sort();
   };
 
-  public query func getComplaintsByStatus(status : { #open; #inProgress; #resolved }) : async [Complaint] {
+  public query ({ caller }) func getComplaintsByStatus(status : { #open; #inProgress; #resolved }) : async [Complaint] {
     complaints.values().toArray().filter(func(c) { c.status == status });
   };
 
-  public query func getComplaintsBySection(sectionId : Text) : async [Complaint] {
+  public query ({ caller }) func getComplaintsBySection(sectionId : Text) : async [Complaint] {
     complaints.values().toArray().filter(func(c) {
       switch (c.sectionId) {
         case (null) { false };
@@ -301,7 +304,7 @@ actor {
     });
   };
 
-  public query func getComplaintsByComputer(computerId : Text) : async [Complaint] {
+  public query ({ caller }) func getComplaintsByComputer(computerId : Text) : async [Complaint] {
     complaints.values().toArray().filter(func(c) {
       switch (c.computerId) {
         case (null) { false };
@@ -312,41 +315,41 @@ actor {
 
   public shared ({ caller }) func updateComplaint(complaint : Complaint) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update complaints");
-    };
-    if (not complaints.containsKey(complaint.id)) {
       return;
     };
-    complaints.add(complaint.id, complaint);
+    switch (complaints.get(complaint.id)) {
+      case (null) {};
+      case (?_) { complaints.add(complaint.id, complaint) };
+    };
   };
 
   public shared ({ caller }) func deleteComplaint(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete complaints");
-    };
-    if (not complaints.containsKey(id)) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       return;
     };
-    complaints.remove(id);
+    switch (complaints.get(id)) {
+      case (null) {};
+      case (?_) { complaints.remove(id) };
+    };
   };
 
   // AMCPart CRUD
   public shared ({ caller }) func createAMCPart(part : AMCPart) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can create AMC parts");
+      return;
     };
     amcParts.add(part.id, part);
   };
 
-  public query func getAMCPart(id : Text) : async ?AMCPart {
+  public query ({ caller }) func getAMCPart(id : Text) : async ?AMCPart {
     amcParts.get(id);
   };
 
-  public query func getAllAMCParts() : async [AMCPart] {
+  public query ({ caller }) func getAllAMCParts() : async [AMCPart] {
     amcParts.values().toArray().sort();
   };
 
-  public query func getExpiringAMCParts(days : Int) : async [AMCPart] {
+  public query ({ caller }) func getExpiringAMCParts(days : Int) : async [AMCPart] {
     let now = Time.now();
     let expiryThreshold = now + (days * 24 * 3600 * 1000000000);
     amcParts.values().toArray().filter(func(p) {
@@ -359,26 +362,26 @@ actor {
 
   public shared ({ caller }) func updateAMCPart(part : AMCPart) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update AMC parts");
-    };
-    if (not amcParts.containsKey(part.id)) {
       return;
     };
-    amcParts.add(part.id, part);
+    switch (amcParts.get(part.id)) {
+      case (null) {};
+      case (?_) { amcParts.add(part.id, part) };
+    };
   };
 
   public shared ({ caller }) func deleteAMCPart(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete AMC parts");
-    };
-    if (not amcParts.containsKey(id)) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       return;
     };
-    amcParts.remove(id);
+    switch (amcParts.get(id)) {
+      case (null) {};
+      case (?_) { amcParts.remove(id) };
+    };
   };
 
-  // Dashboard Stats
-  public query func getDashboardStats() : async {
+  // Dashboard Stats - accessible to all including guests
+  public query ({ caller }) func getDashboardStats() : async {
     totalComputers : Nat;
     totalStandbySystems : Nat;
     openComplaints : Nat;

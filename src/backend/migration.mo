@@ -1,7 +1,5 @@
 import Map "mo:core/Map";
-import Int "mo:core/Int";
 import Principal "mo:core/Principal";
-import Storage "blob-storage/Storage";
 
 module {
   type Section = {
@@ -24,7 +22,7 @@ module {
     amcStartDate : Int;
     amcEndDate : Int;
     status : { #active; #standby; #retired };
-    datasheetBlob : ?Storage.ExternalBlob;
+    datasheetBlob : ?Blob;
     notes : Text;
     createdAt : Int;
     monitorSerial : Text;
@@ -32,6 +30,8 @@ module {
     ip1 : Text;
     ip2 : Text;
     remarks : Text;
+    companyName : Text;
+    amcCompany : Text;
   };
 
   type StandbySystem = {
@@ -76,27 +76,9 @@ module {
     name : Text;
   };
 
-  // Define types for old and new actors
-  type OldComputer = {
-    id : Text;
-    sectionId : Text;
-    seatNumber : Text;
-    currentUser : Text;
-    serialNumber : Text;
-    model : Text;
-    brand : Text;
-    purchaseDate : Int;
-    amcStartDate : Int;
-    amcEndDate : Int;
-    status : { #active; #standby; #retired };
-    datasheetBlob : ?Storage.ExternalBlob;
-    notes : Text;
-    createdAt : Int;
-  };
-
   type OldActor = {
     sections : Map.Map<Text, Section>;
-    computers : Map.Map<Text, OldComputer>;
+    computers : Map.Map<Text, Computer>;
     standbySystems : Map.Map<Text, StandbySystem>;
     complaints : Map.Map<Text, Complaint>;
     amcParts : Map.Map<Text, AMCPart>;
@@ -113,21 +95,6 @@ module {
   };
 
   public func run(old : OldActor) : NewActor {
-    let newComputers = old.computers.map<Text, OldComputer, Computer>(
-      func(_id, oldComputer) {
-        {
-          oldComputer with
-          monitorSerial = "";
-          monitorModel = "";
-          ip1 = "";
-          ip2 = "";
-          remarks = "";
-        };
-      }
-    );
-    {
-      old with
-      computers = newComputers;
-    };
+    old;
   };
 };

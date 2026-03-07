@@ -62,6 +62,7 @@ export interface Computer {
     ip2: string;
     status: Variant_active_standby_retired;
     model: string;
+    amcCompany: string;
     datasheetBlob?: ExternalBlob;
     monitorModel: string;
     purchaseDate: bigint;
@@ -70,6 +71,7 @@ export interface Computer {
     sectionId: string;
     serialNumber: string;
     notes: string;
+    companyName: string;
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;

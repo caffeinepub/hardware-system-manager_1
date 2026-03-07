@@ -94,6 +94,8 @@ const emptyForm = () => ({
   serialNumber: "",
   model: "",
   brand: "",
+  companyName: "",
+  amcCompany: "",
   monitorSerial: "",
   monitorModel: "",
   ip1: "",
@@ -142,6 +144,8 @@ export default function Computers() {
       serialNumber: computer.serialNumber,
       model: computer.model,
       brand: computer.brand,
+      companyName: computer.companyName ?? "",
+      amcCompany: computer.amcCompany ?? "",
       monitorSerial: computer.monitorSerial,
       monitorModel: computer.monitorModel,
       ip1: computer.ip1,
@@ -192,6 +196,8 @@ export default function Computers() {
       serialNumber: form.serialNumber,
       model: form.model,
       brand: form.brand,
+      companyName: form.companyName,
+      amcCompany: form.amcCompany,
       monitorSerial: form.monitorSerial,
       monitorModel: form.monitorModel,
       ip1: form.ip1,
@@ -486,6 +492,30 @@ export default function Computers() {
                 value={form.brand}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, brand: e.target.value }))
+                }
+                data-ocid="computers.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-company">Company Name</Label>
+              <Input
+                id="c-company"
+                placeholder="e.g. Acme Corp"
+                value={form.companyName}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, companyName: e.target.value }))
+                }
+                data-ocid="computers.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-amc-company">AMC Company</Label>
+              <Input
+                id="c-amc-company"
+                placeholder="e.g. TechCare Services"
+                value={form.amcCompany}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, amcCompany: e.target.value }))
                 }
                 data-ocid="computers.input"
               />

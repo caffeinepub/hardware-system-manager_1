@@ -1,38 +1,31 @@
 # Hardware System Manager
 
 ## Current State
-The app has 7 pages: Dashboard, Sections, Computers, Standby Systems, Complaints, AMC Parts, Maintenance Charts. There are two login options (Admin: Kpsckkdadmin, User: Mainuser123) with full CRUD access. Computers track: section, seat, current user, serial number, model, brand, purchase/AMC dates, status, datasheet blob, notes.
-
-The backend has no support for monitor serial/model, IP addresses, bulk import, or stock/default system pairings.
+The app has a Motoko backend with full CRUD for Sections, Computers, StandbySystems, Complaints, and AMCParts. All write operations require `AccessControl.hasPermission(#admin)` and all read operations require `hasPermission(#user)`. Since this app uses passkey login (not ICP Internet Identity), callers are always anonymous and all permission checks fail, making it impossible to add, edit, or delete any data. The frontend already has passkey-based admin/user login UI that handles access control.
 
 ## Requested Changes (Diff)
 
 ### Add
-- **CSV Upload page** ("Data Import" in sidebar): accepts a CSV file with columns: Section Name, Seat, Current User's Name, CPU Serial Number, CPU Model, Monitor Serial Number, Monitor Model, IP 1, IP 2, Remarks
-  - Parse CSV client-side, preview rows before import
-  - On confirm, auto-create sections if they don't exist, then create/update computer records with all fields
-  - Show import progress and a results summary (rows imported, skipped, errors)
-  - Provide a downloadable CSV template
-- **Stock / Default Systems page** ("Stock Data" in sidebar): shows the actual paired CPU+Monitor inventory per seat
-  - Displays each seat as a card: Section, Seat, CPU serial + model, Monitor serial + model, IPs, current user, remarks
-  - Filter by section
-  - Read-only view, data populated from the imported/existing computers
+- Nothing new
 
 ### Modify
-- **Computer data model** -- extend to store: monitorSerial, monitorModel, ip1, ip2, remarks fields
-- **Computers page** -- add the 5 new fields to the add/edit form and display columns
-- **Sections page** -- seats shown in section cards should also reflect monitor pairing (CPU + Monitor as a pair label)
-- **Dashboard** -- stat cards and charts already auto-populate from computers; no structural change needed
+- Remove all `AccessControl` / `MixinAuthorization` usage from the backend
+- Remove all `Runtime.trap("Unauthorized...")` guards from every function
+- All CRUD endpoints (createSection, updateSection, deleteSection, createComputer, updateComputer, deleteComputer, createStandbySystem, updateStandbySystem, deleteStandbySystem, createComplaint, updateComplaint, deleteComplaint, createAMCPart, updateAMCPart, deleteAMCPart) should be open (no auth checks)
+- All query endpoints (getAllSections, getAllComputers, etc.) should be open
+- `isCallerAdmin()` should always return `true`
+- `_initializeAccessControlWithSecret` stub should remain as a no-op so the frontend binding doesn't break
 
 ### Remove
-- Nothing removed
+- `import MixinAuthorization`
+- `import AccessControl`
+- All `AccessControl.hasPermission` / `AccessControl.isAdmin` checks
+- `accessControlState` initialization
 
 ## Implementation Plan
-1. Update backend `main.mo`: add `monitorSerial`, `monitorModel`, `ip1`, `ip2`, `remarks` fields to `Computer` type
-2. Regenerate `backend.d.ts` to expose new Computer fields
-3. Create `src/frontend/src/pages/DataImport.tsx`: CSV upload UI with template download, preview table, bulk import logic using existing createSection/createComputer mutations
-4. Create `src/frontend/src/pages/StockData.tsx`: read-only view of computer records displayed as CPU+Monitor pairs, filterable by section
-5. Update `Computers.tsx`: add 5 new fields to add/edit form and table columns
-6. Update `Sections.tsx`: SeatCard shows CPU+Monitor label
-7. Update `App.tsx`: add routes `/import` and `/stock`
-8. Update `Layout.tsx`: add sidebar links for "Data Import" and "Stock Data"
+1. Regenerate backend Motoko code without authorization guards
+2. Keep all existing data types (Section, Computer, StandbySystem, Complaint, AMCPart, UserProfile) unchanged
+3. Keep blob-storage Mixin and Storage imports
+4. Keep `_initializeAccessControlWithSecret` as a no-op public shared func
+5. Keep `isCallerAdmin` returning `true`
+6. Validate and deploy

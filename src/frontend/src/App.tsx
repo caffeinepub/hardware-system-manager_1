@@ -9,14 +9,12 @@ import {
 import { Layout } from "./components/Layout";
 import { AdminProvider } from "./contexts/AdminContext";
 
-import AMCParts from "./pages/AMCParts";
 import AdminLogin from "./pages/AdminLogin";
 import Complaints from "./pages/Complaints";
 import Computers from "./pages/Computers";
 // Pages
 import Dashboard from "./pages/Dashboard";
 import DataImport from "./pages/DataImport";
-import MaintenanceCharts from "./pages/MaintenanceCharts";
 import Sections from "./pages/Sections";
 import StandbySystems from "./pages/StandbySystems";
 import StockData from "./pages/StockData";
@@ -64,18 +62,6 @@ const complaintsRoute = createRoute({
   component: Complaints,
 });
 
-const amcPartsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/amc-parts",
-  component: AMCParts,
-});
-
-const chartsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/charts",
-  component: MaintenanceCharts,
-});
-
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/admin",
@@ -106,8 +92,6 @@ const routeTree = rootRoute.addChildren([
   computersRoute,
   standbyRoute,
   complaintsRoute,
-  amcPartsRoute,
-  chartsRoute,
   adminRoute,
   userLoginRoute,
   importRoute,

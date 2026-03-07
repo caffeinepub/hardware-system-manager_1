@@ -144,6 +144,7 @@ export interface Computer {
     ip2: string;
     status: Variant_active_standby_retired;
     model: string;
+    amcCompany: string;
     datasheetBlob?: ExternalBlob;
     monitorModel: string;
     purchaseDate: bigint;
@@ -152,6 +153,7 @@ export interface Computer {
     sectionId: string;
     serialNumber: string;
     notes: string;
+    companyName: string;
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
@@ -1039,6 +1041,7 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
         retired: null;
     };
     model: string;
+    amcCompany: string;
     datasheetBlob: [] | [_ExternalBlob];
     monitorModel: string;
     purchaseDate: bigint;
@@ -1047,6 +1050,7 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
     sectionId: string;
     serialNumber: string;
     notes: string;
+    companyName: string;
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
@@ -1059,6 +1063,7 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
     ip2: string;
     status: Variant_active_standby_retired;
     model: string;
+    amcCompany: string;
     datasheetBlob?: ExternalBlob;
     monitorModel: string;
     purchaseDate: bigint;
@@ -1067,6 +1072,7 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
     sectionId: string;
     serialNumber: string;
     notes: string;
+    companyName: string;
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
@@ -1080,6 +1086,7 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
         ip2: value.ip2,
         status: from_candid_variant_n38(_uploadFile, _downloadFile, value.status),
         model: value.model,
+        amcCompany: value.amcCompany,
         datasheetBlob: record_opt_to_undefined(await from_candid_opt_n39(_uploadFile, _downloadFile, value.datasheetBlob)),
         monitorModel: value.monitorModel,
         purchaseDate: value.purchaseDate,
@@ -1088,6 +1095,7 @@ async function from_candid_record_n37(_uploadFile: (file: ExternalBlob) => Promi
         sectionId: value.sectionId,
         serialNumber: value.serialNumber,
         notes: value.notes,
+        companyName: value.companyName,
         brand: value.brand,
         amcEndDate: value.amcEndDate,
         amcStartDate: value.amcStartDate,
@@ -1333,6 +1341,7 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
     ip2: string;
     status: Variant_active_standby_retired;
     model: string;
+    amcCompany: string;
     datasheetBlob?: ExternalBlob;
     monitorModel: string;
     purchaseDate: bigint;
@@ -1341,6 +1350,7 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
     sectionId: string;
     serialNumber: string;
     notes: string;
+    companyName: string;
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
@@ -1359,6 +1369,7 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
         retired: null;
     };
     model: string;
+    amcCompany: string;
     datasheetBlob: [] | [_ExternalBlob];
     monitorModel: string;
     purchaseDate: bigint;
@@ -1367,6 +1378,7 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
     sectionId: string;
     serialNumber: string;
     notes: string;
+    companyName: string;
     brand: string;
     amcEndDate: bigint;
     amcStartDate: bigint;
@@ -1380,6 +1392,7 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
         ip2: value.ip2,
         status: to_candid_variant_n18(_uploadFile, _downloadFile, value.status),
         model: value.model,
+        amcCompany: value.amcCompany,
         datasheetBlob: value.datasheetBlob ? candid_some(await to_candid_ExternalBlob_n19(_uploadFile, _downloadFile, value.datasheetBlob)) : candid_none(),
         monitorModel: value.monitorModel,
         purchaseDate: value.purchaseDate,
@@ -1388,6 +1401,7 @@ async function to_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise
         sectionId: value.sectionId,
         serialNumber: value.serialNumber,
         notes: value.notes,
+        companyName: value.companyName,
         brand: value.brand,
         amcEndDate: value.amcEndDate,
         amcStartDate: value.amcStartDate,

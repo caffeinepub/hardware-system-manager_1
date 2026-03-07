@@ -219,6 +219,8 @@ export default function DataImport() {
           serialNumber: row.cpuSerial,
           model: row.cpuModel,
           brand: "",
+          companyName: "",
+          amcCompany: "",
           monitorSerial: row.monitorSerial,
           monitorModel: row.monitorModel,
           ip1: row.ip1,

@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   AlertTriangle,
-  BarChart3,
   Building2,
   ChevronRight,
   Database,
@@ -12,7 +11,6 @@ import {
   LogOut,
   Menu,
   Monitor,
-  Package,
   Server,
   ShieldCheck,
   Upload,
@@ -28,8 +26,6 @@ const navItems = [
   { path: "/computers", label: "Computers", icon: Monitor },
   { path: "/standby", label: "Standby Systems", icon: Server },
   { path: "/complaints", label: "Complaints", icon: AlertTriangle },
-  { path: "/amc-parts", label: "AMC Parts", icon: Package },
-  { path: "/charts", label: "Maintenance Charts", icon: BarChart3 },
   { path: "/import", label: "Data Import", icon: Upload },
   { path: "/stock", label: "Stock Data", icon: Database },
 ];
