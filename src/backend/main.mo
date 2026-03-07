@@ -3,13 +3,15 @@ import Int "mo:core/Int";
 import Time "mo:core/Time";
 import Array "mo:core/Array";
 import Order "mo:core/Order";
-import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
+import Runtime "mo:core/Runtime";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
-import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
+import AccessControl "authorization/access-control";
+import Migration "migration";
 
+(with migration = Migration.run)
 actor {
   include MixinStorage();
 
@@ -119,14 +121,14 @@ actor {
   let amcParts = Map.empty<Text, AMCPart>();
   let userProfiles = Map.empty<Principal, UserProfile>();
 
-  // Authorization
+  // Initialize AccessControl
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
   // User Profile Management
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access profiles");
+      Runtime.trap("Unauthorized: Only users can view profiles");
     };
     userProfiles.get(caller);
   };
@@ -147,17 +149,11 @@ actor {
 
   // Section CRUD
   public shared ({ caller }) func createSection(section : Section) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can create sections");
-    };
     sections.add(section.id, section);
   };
 
-  public query func getSection(id : Text) : async Section {
-    switch (sections.get(id)) {
-      case (null) { Runtime.trap("Section not found") };
-      case (?section) { section };
-    };
+  public query func getSection(id : Text) : async ?Section {
+    sections.get(id);
   };
 
   public query func getAllSections() : async [Section] {
@@ -165,38 +161,26 @@ actor {
   };
 
   public shared ({ caller }) func updateSection(section : Section) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update sections");
-    };
     if (not sections.containsKey(section.id)) {
-      Runtime.trap("Section not found");
+      return;
     };
     sections.add(section.id, section);
   };
 
   public shared ({ caller }) func deleteSection(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete sections");
-    };
     if (not sections.containsKey(id)) {
-      Runtime.trap("Section not found");
+      return;
     };
     sections.remove(id);
   };
 
   // Computer CRUD
   public shared ({ caller }) func createComputer(computer : Computer) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can create computers");
-    };
     computers.add(computer.id, computer);
   };
 
-  public query func getComputer(id : Text) : async Computer {
-    switch (computers.get(id)) {
-      case (null) { Runtime.trap("Computer not found") };
-      case (?computer) { computer };
-    };
+  public query func getComputer(id : Text) : async ?Computer {
+    computers.get(id);
   };
 
   public query func getAllComputers() : async [Computer] {
@@ -216,38 +200,26 @@ actor {
   };
 
   public shared ({ caller }) func updateComputer(computer : Computer) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update computers");
-    };
     if (not computers.containsKey(computer.id)) {
-      Runtime.trap("Computer not found");
+      return;
     };
     computers.add(computer.id, computer);
   };
 
   public shared ({ caller }) func deleteComputer(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete computers");
-    };
     if (not computers.containsKey(id)) {
-      Runtime.trap("Computer not found");
+      return;
     };
     computers.remove(id);
   };
 
   // StandbySystem CRUD
   public shared ({ caller }) func createStandbySystem(standbySystem : StandbySystem) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can create standby systems");
-    };
     standbySystems.add(standbySystem.id, standbySystem);
   };
 
-  public query func getStandbySystem(id : Text) : async StandbySystem {
-    switch (standbySystems.get(id)) {
-      case (null) { Runtime.trap("Standby system not found") };
-      case (?standbySystem) { standbySystem };
-    };
+  public query func getStandbySystem(id : Text) : async ?StandbySystem {
+    standbySystems.get(id);
   };
 
   public query func getAllStandbySystems() : async [StandbySystem] {
@@ -255,38 +227,26 @@ actor {
   };
 
   public shared ({ caller }) func updateStandbySystem(standbySystem : StandbySystem) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update standby systems");
-    };
     if (not standbySystems.containsKey(standbySystem.id)) {
-      Runtime.trap("Standby system not found");
+      return;
     };
     standbySystems.add(standbySystem.id, standbySystem);
   };
 
   public shared ({ caller }) func deleteStandbySystem(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete standby systems");
-    };
     if (not standbySystems.containsKey(id)) {
-      Runtime.trap("Standby system not found");
+      return;
     };
     standbySystems.remove(id);
   };
 
   // Complaint CRUD
   public shared ({ caller }) func createComplaint(complaint : Complaint) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can create complaints");
-    };
     complaints.add(complaint.id, complaint);
   };
 
-  public query func getComplaint(id : Text) : async Complaint {
-    switch (complaints.get(id)) {
-      case (null) { Runtime.trap("Complaint not found") };
-      case (?complaint) { complaint };
-    };
+  public query func getComplaint(id : Text) : async ?Complaint {
+    complaints.get(id);
   };
 
   public query func getAllComplaints() : async [Complaint] {
@@ -316,38 +276,26 @@ actor {
   };
 
   public shared ({ caller }) func updateComplaint(complaint : Complaint) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update complaints");
-    };
     if (not complaints.containsKey(complaint.id)) {
-      Runtime.trap("Complaint not found");
+      return;
     };
     complaints.add(complaint.id, complaint);
   };
 
   public shared ({ caller }) func deleteComplaint(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete complaints");
-    };
     if (not complaints.containsKey(id)) {
-      Runtime.trap("Complaint not found");
+      return;
     };
     complaints.remove(id);
   };
 
   // AMCPart CRUD
   public shared ({ caller }) func createAMCPart(part : AMCPart) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can create AMC parts");
-    };
     amcParts.add(part.id, part);
   };
 
-  public query func getAMCPart(id : Text) : async AMCPart {
-    switch (amcParts.get(id)) {
-      case (null) { Runtime.trap("AMC part not found") };
-      case (?part) { part };
-    };
+  public query func getAMCPart(id : Text) : async ?AMCPart {
+    amcParts.get(id);
   };
 
   public query func getAllAMCParts() : async [AMCPart] {
@@ -366,21 +314,15 @@ actor {
   };
 
   public shared ({ caller }) func updateAMCPart(part : AMCPart) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update AMC parts");
-    };
     if (not amcParts.containsKey(part.id)) {
-      Runtime.trap("AMC part not found");
+      return;
     };
     amcParts.add(part.id, part);
   };
 
   public shared ({ caller }) func deleteAMCPart(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete AMC parts");
-    };
     if (not amcParts.containsKey(id)) {
-      Runtime.trap("AMC part not found");
+      return;
     };
     amcParts.remove(id);
   };

@@ -117,7 +117,7 @@ export interface backendInterface {
     deleteComputer(id: string): Promise<void>;
     deleteSection(id: string): Promise<void>;
     deleteStandbySystem(id: string): Promise<void>;
-    getAMCPart(id: string): Promise<AMCPart>;
+    getAMCPart(id: string): Promise<AMCPart | null>;
     getAllAMCParts(): Promise<Array<AMCPart>>;
     getAllComplaints(): Promise<Array<Complaint>>;
     getAllComputers(): Promise<Array<Computer>>;
@@ -125,11 +125,11 @@ export interface backendInterface {
     getAllStandbySystems(): Promise<Array<StandbySystem>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
-    getComplaint(id: string): Promise<Complaint>;
+    getComplaint(id: string): Promise<Complaint | null>;
     getComplaintsByComputer(computerId: string): Promise<Array<Complaint>>;
     getComplaintsBySection(sectionId: string): Promise<Array<Complaint>>;
     getComplaintsByStatus(status: Variant_resolved_open_inProgress): Promise<Array<Complaint>>;
-    getComputer(id: string): Promise<Computer>;
+    getComputer(id: string): Promise<Computer | null>;
     getComputersBySection(sectionId: string): Promise<Array<Computer>>;
     getComputersWithExpiringAMC(days: bigint): Promise<Array<Computer>>;
     getDashboardStats(): Promise<{
@@ -140,8 +140,8 @@ export interface backendInterface {
         totalSections: bigint;
     }>;
     getExpiringAMCParts(days: bigint): Promise<Array<AMCPart>>;
-    getSection(id: string): Promise<Section>;
-    getStandbySystem(id: string): Promise<StandbySystem>;
+    getSection(id: string): Promise<Section | null>;
+    getStandbySystem(id: string): Promise<StandbySystem | null>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;

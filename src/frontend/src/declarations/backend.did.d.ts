@@ -122,7 +122,7 @@ export interface _SERVICE {
   'deleteComputer' : ActorMethod<[string], undefined>,
   'deleteSection' : ActorMethod<[string], undefined>,
   'deleteStandbySystem' : ActorMethod<[string], undefined>,
-  'getAMCPart' : ActorMethod<[string], AMCPart>,
+  'getAMCPart' : ActorMethod<[string], [] | [AMCPart]>,
   'getAllAMCParts' : ActorMethod<[], Array<AMCPart>>,
   'getAllComplaints' : ActorMethod<[], Array<Complaint>>,
   'getAllComputers' : ActorMethod<[], Array<Computer>>,
@@ -130,14 +130,14 @@ export interface _SERVICE {
   'getAllStandbySystems' : ActorMethod<[], Array<StandbySystem>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
-  'getComplaint' : ActorMethod<[string], Complaint>,
+  'getComplaint' : ActorMethod<[string], [] | [Complaint]>,
   'getComplaintsByComputer' : ActorMethod<[string], Array<Complaint>>,
   'getComplaintsBySection' : ActorMethod<[string], Array<Complaint>>,
   'getComplaintsByStatus' : ActorMethod<
     [{ 'resolved' : null } | { 'open' : null } | { 'inProgress' : null }],
     Array<Complaint>
   >,
-  'getComputer' : ActorMethod<[string], Computer>,
+  'getComputer' : ActorMethod<[string], [] | [Computer]>,
   'getComputersBySection' : ActorMethod<[string], Array<Computer>>,
   'getComputersWithExpiringAMC' : ActorMethod<[bigint], Array<Computer>>,
   'getDashboardStats' : ActorMethod<
@@ -151,8 +151,8 @@ export interface _SERVICE {
     }
   >,
   'getExpiringAMCParts' : ActorMethod<[bigint], Array<AMCPart>>,
-  'getSection' : ActorMethod<[string], Section>,
-  'getStandbySystem' : ActorMethod<[string], StandbySystem>,
+  'getSection' : ActorMethod<[string], [] | [Section]>,
+  'getStandbySystem' : ActorMethod<[string], [] | [StandbySystem]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,

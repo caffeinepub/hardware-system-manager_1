@@ -144,7 +144,7 @@ export const idlService = IDL.Service({
   'deleteComputer' : IDL.Func([IDL.Text], [], []),
   'deleteSection' : IDL.Func([IDL.Text], [], []),
   'deleteStandbySystem' : IDL.Func([IDL.Text], [], []),
-  'getAMCPart' : IDL.Func([IDL.Text], [AMCPart], ['query']),
+  'getAMCPart' : IDL.Func([IDL.Text], [IDL.Opt(AMCPart)], ['query']),
   'getAllAMCParts' : IDL.Func([], [IDL.Vec(AMCPart)], ['query']),
   'getAllComplaints' : IDL.Func([], [IDL.Vec(Complaint)], ['query']),
   'getAllComputers' : IDL.Func([], [IDL.Vec(Computer)], ['query']),
@@ -152,7 +152,7 @@ export const idlService = IDL.Service({
   'getAllStandbySystems' : IDL.Func([], [IDL.Vec(StandbySystem)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-  'getComplaint' : IDL.Func([IDL.Text], [Complaint], ['query']),
+  'getComplaint' : IDL.Func([IDL.Text], [IDL.Opt(Complaint)], ['query']),
   'getComplaintsByComputer' : IDL.Func(
       [IDL.Text],
       [IDL.Vec(Complaint)],
@@ -174,7 +174,7 @@ export const idlService = IDL.Service({
       [IDL.Vec(Complaint)],
       ['query'],
     ),
-  'getComputer' : IDL.Func([IDL.Text], [Computer], ['query']),
+  'getComputer' : IDL.Func([IDL.Text], [IDL.Opt(Computer)], ['query']),
   'getComputersBySection' : IDL.Func(
       [IDL.Text],
       [IDL.Vec(Computer)],
@@ -199,8 +199,12 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getExpiringAMCParts' : IDL.Func([IDL.Int], [IDL.Vec(AMCPart)], ['query']),
-  'getSection' : IDL.Func([IDL.Text], [Section], ['query']),
-  'getStandbySystem' : IDL.Func([IDL.Text], [StandbySystem], ['query']),
+  'getSection' : IDL.Func([IDL.Text], [IDL.Opt(Section)], ['query']),
+  'getStandbySystem' : IDL.Func(
+      [IDL.Text],
+      [IDL.Opt(StandbySystem)],
+      ['query'],
+    ),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
@@ -354,7 +358,7 @@ export const idlFactory = ({ IDL }) => {
     'deleteComputer' : IDL.Func([IDL.Text], [], []),
     'deleteSection' : IDL.Func([IDL.Text], [], []),
     'deleteStandbySystem' : IDL.Func([IDL.Text], [], []),
-    'getAMCPart' : IDL.Func([IDL.Text], [AMCPart], ['query']),
+    'getAMCPart' : IDL.Func([IDL.Text], [IDL.Opt(AMCPart)], ['query']),
     'getAllAMCParts' : IDL.Func([], [IDL.Vec(AMCPart)], ['query']),
     'getAllComplaints' : IDL.Func([], [IDL.Vec(Complaint)], ['query']),
     'getAllComputers' : IDL.Func([], [IDL.Vec(Computer)], ['query']),
@@ -362,7 +366,7 @@ export const idlFactory = ({ IDL }) => {
     'getAllStandbySystems' : IDL.Func([], [IDL.Vec(StandbySystem)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-    'getComplaint' : IDL.Func([IDL.Text], [Complaint], ['query']),
+    'getComplaint' : IDL.Func([IDL.Text], [IDL.Opt(Complaint)], ['query']),
     'getComplaintsByComputer' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(Complaint)],
@@ -384,7 +388,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(Complaint)],
         ['query'],
       ),
-    'getComputer' : IDL.Func([IDL.Text], [Computer], ['query']),
+    'getComputer' : IDL.Func([IDL.Text], [IDL.Opt(Computer)], ['query']),
     'getComputersBySection' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(Computer)],
@@ -409,8 +413,12 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getExpiringAMCParts' : IDL.Func([IDL.Int], [IDL.Vec(AMCPart)], ['query']),
-    'getSection' : IDL.Func([IDL.Text], [Section], ['query']),
-    'getStandbySystem' : IDL.Func([IDL.Text], [StandbySystem], ['query']),
+    'getSection' : IDL.Func([IDL.Text], [IDL.Opt(Section)], ['query']),
+    'getStandbySystem' : IDL.Func(
+        [IDL.Text],
+        [IDL.Opt(StandbySystem)],
+        ['query'],
+      ),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
