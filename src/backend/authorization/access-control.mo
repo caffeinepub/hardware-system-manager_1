@@ -38,22 +38,30 @@ module {
   };
 
   public func getUserRole(state : AccessControlState, caller : Principal) : UserRole {
-    if (caller.isAnonymous()) { return #admin };
+    if (caller.isAnonymous()) { return #guest };
     switch (state.userRoles.get(caller)) {
       case (?role) { role };
-      case (null) { #admin };
+      case (null) {
+        Runtime.trap("User is not registered");
+      };
     };
   };
 
   public func assignRole(state : AccessControlState, caller : Principal, user : Principal, role : UserRole) {
+    if (not (isAdmin(state, caller))) {
+      Runtime.trap("Unauthorized: Only admins can assign user roles");
+    };
     state.userRoles.add(user, role);
   };
 
   public func hasPermission(state : AccessControlState, caller : Principal, requiredRole : UserRole) : Bool {
-    true
+    let userRole = getUserRole(state, caller);
+    if (userRole == #admin or requiredRole == #guest) { true } else {
+      userRole == requiredRole;
+    };
   };
 
   public func isAdmin(state : AccessControlState, caller : Principal) : Bool {
-    true
+    getUserRole(state, caller) == #admin;
   };
 };

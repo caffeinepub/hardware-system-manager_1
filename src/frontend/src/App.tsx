@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { Layout } from "./components/Layout";
 import { AdminProvider } from "./contexts/AdminContext";
+import { InternetIdentityProvider } from "./hooks/useInternetIdentity";
 
 import AdminLogin from "./pages/AdminLogin";
 import Complaints from "./pages/Complaints";
@@ -23,12 +24,14 @@ import UserLogin from "./pages/UserLogin";
 // Root route with layout
 const rootRoute = createRootRoute({
   component: () => (
-    <AdminProvider>
-      <Layout>
-        <Outlet />
-      </Layout>
-      <Toaster position="top-right" richColors />
-    </AdminProvider>
+    <InternetIdentityProvider>
+      <AdminProvider>
+        <Layout>
+          <Outlet />
+        </Layout>
+        <Toaster position="top-right" richColors />
+      </AdminProvider>
+    </InternetIdentityProvider>
   ),
 });
 

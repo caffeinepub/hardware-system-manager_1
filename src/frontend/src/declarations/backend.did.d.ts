@@ -25,19 +25,27 @@ export interface AMCPart {
 }
 export interface Complaint {
   'id' : string,
-  'status' : { 'resolved' : null } |
-    { 'open' : null } |
-    { 'inProgress' : null },
+  'status' : ComplaintStatus,
+  'caseClearedDate' : [] | [bigint],
   'computerId' : [] | [string],
   'createdAt' : bigint,
+  'spareTakenDate' : [] | [bigint],
+  'unit' : string,
   'description' : string,
+  'sparesTaken' : string,
+  'extraCol1' : string,
+  'extraCol2' : string,
   'sectionId' : [] | [string],
   'reportedBy' : string,
-  'priority' : { 'low' : null } |
-    { 'high' : null } |
-    { 'medium' : null },
+  'amcTeam' : string,
+  'priority' : Priority,
+  'caseAttendedDate' : [] | [bigint],
   'resolvedAt' : [] | [bigint],
+  'unitSlNo' : string,
 }
+export type ComplaintStatus = { 'resolved' : null } |
+  { 'open' : null } |
+  { 'inProgress' : null };
 export interface Computer {
   'id' : string,
   'ip1' : string,
@@ -64,6 +72,9 @@ export interface Computer {
   'monitorSerial' : string,
 }
 export type ExternalBlob = Uint8Array;
+export type Priority = { 'low' : null } |
+  { 'high' : null } |
+  { 'medium' : null };
 export interface Section {
   'id' : string,
   'name' : string,
@@ -140,10 +151,7 @@ export interface _SERVICE {
   'getComplaint' : ActorMethod<[string], [] | [Complaint]>,
   'getComplaintsByComputer' : ActorMethod<[string], Array<Complaint>>,
   'getComplaintsBySection' : ActorMethod<[string], Array<Complaint>>,
-  'getComplaintsByStatus' : ActorMethod<
-    [{ 'resolved' : null } | { 'open' : null } | { 'inProgress' : null }],
-    Array<Complaint>
-  >,
+  'getComplaintsByStatus' : ActorMethod<[ComplaintStatus], Array<Complaint>>,
   'getComputer' : ActorMethod<[string], [] | [Computer]>,
   'getComputersBySection' : ActorMethod<[string], Array<Computer>>,
   'getComputersWithExpiringAMC' : ActorMethod<[bigint], Array<Computer>>,

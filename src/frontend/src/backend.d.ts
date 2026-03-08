@@ -40,14 +40,23 @@ export interface StandbySystem {
 }
 export interface Complaint {
     id: string;
-    status: Variant_resolved_open_inProgress;
+    status: ComplaintStatus;
+    caseClearedDate?: bigint;
     computerId?: string;
     createdAt: bigint;
+    spareTakenDate?: bigint;
+    unit: string;
     description: string;
+    sparesTaken: string;
+    extraCol1: string;
+    extraCol2: string;
     sectionId?: string;
     reportedBy: string;
-    priority: Variant_low_high_medium;
+    amcTeam: string;
+    priority: Priority;
+    caseAttendedDate?: bigint;
     resolvedAt?: bigint;
+    unitSlNo: string;
 }
 export interface Section {
     id: string;
@@ -82,6 +91,16 @@ export interface Computer {
 export interface UserProfile {
     name: string;
 }
+export enum ComplaintStatus {
+    resolved = "resolved",
+    open = "open",
+    inProgress = "inProgress"
+}
+export enum Priority {
+    low = "low",
+    high = "high",
+    medium = "medium"
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -101,16 +120,6 @@ export enum Variant_fair_good_poor {
     fair = "fair",
     good = "good",
     poor = "poor"
-}
-export enum Variant_low_high_medium {
-    low = "low",
-    high = "high",
-    medium = "medium"
-}
-export enum Variant_resolved_open_inProgress {
-    resolved = "resolved",
-    open = "open",
-    inProgress = "inProgress"
 }
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
@@ -135,7 +144,7 @@ export interface backendInterface {
     getComplaint(id: string): Promise<Complaint | null>;
     getComplaintsByComputer(computerId: string): Promise<Array<Complaint>>;
     getComplaintsBySection(sectionId: string): Promise<Array<Complaint>>;
-    getComplaintsByStatus(status: Variant_resolved_open_inProgress): Promise<Array<Complaint>>;
+    getComplaintsByStatus(status: ComplaintStatus): Promise<Array<Complaint>>;
     getComputer(id: string): Promise<Computer | null>;
     getComputersBySection(sectionId: string): Promise<Array<Computer>>;
     getComputersWithExpiringAMC(days: bigint): Promise<Array<Computer>>;

@@ -10,38 +10,92 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "@tanstack/react-router";
-import { AlertCircle, KeyRound, Loader2, LogIn, User } from "lucide-react";
+import {
+  AlertCircle,
+  KeyRound,
+  Loader2,
+  LogIn,
+  Mail,
+  ShieldCheck,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAdmin } from "../contexts/AdminContext";
+import { ICP_IDENTITY_MARKER } from "../contexts/AdminContext";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
+const USER_EMAIL = "anandsreedharamhome@gmail.com";
 const USER_PASSKEY = "Mainuser123";
 
 export default function UserLogin() {
   const navigate = useNavigate();
   const { isLoggedIn, login } = useAdmin();
+  const {
+    login: iiLogin,
+    clear,
+    isLoggingIn,
+    isLoginSuccess,
+    isLoginError,
+    loginError,
+    identity,
+  } = useInternetIdentity();
+
+  const [email, setEmail] = useState("");
   const [passkey, setPasskey] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [navigating, setNavigating] = useState(false);
 
+  // Handle ICP Internet Identity login success
   useEffect(() => {
-    if (isLoggedIn) {
-      void navigate({ to: "/" });
+    if (isLoginSuccess && identity) {
+      const principal = identity.getPrincipal();
+      // Only proceed if the principal is non-anonymous
+      if (!principal.isAnonymous()) {
+        login("user", "ii-identity", ICP_IDENTITY_MARKER);
+        toast.success("Welcome! You are logged in via Internet Identity.");
+        void navigate({ to: "/" });
+      } else {
+        // Anonymous principal means login didn't produce a real identity
+        clear();
+        toast.error(
+          "Internet Identity login returned an anonymous principal. Please try again.",
+        );
+      }
     }
-  }, [isLoggedIn, navigate]);
+  }, [isLoginSuccess, identity, login, navigate, clear]);
+
+  // Show error from ICP login
+  useEffect(() => {
+    if (isLoginError && loginError) {
+      toast.error(`Internet Identity login failed: ${loginError.message}`);
+    }
+  }, [isLoginError, loginError]);
+
+  if (isLoggedIn) {
+    void navigate({ to: "/" });
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
 
-    if (passkey === USER_PASSKEY) {
-      setNavigating(true);
-      login("user", USER_PASSKEY);
-      toast.success("Welcome!");
-      await navigate({ to: "/" });
-    } else {
-      setErrorMsg("Incorrect passkey. Please try again.");
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (trimmedEmail !== USER_EMAIL.toLowerCase()) {
+      setErrorMsg("Email not recognised. Please check and try again.");
+      return;
     }
+
+    if (passkey !== USER_PASSKEY) {
+      setErrorMsg("Incorrect passkey. Please try again.");
+      return;
+    }
+
+    setNavigating(true);
+    login("user", USER_PASSKEY, trimmedEmail);
+    toast.success("Welcome! You are logged in as an authorized user.");
+    await navigate({ to: "/" });
   };
 
   return (
@@ -52,13 +106,13 @@ export default function UserLogin() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 mb-4">
-            <User className="w-8 h-8 text-blue-500" />
+            <Mail className="w-8 h-8 text-blue-500" />
           </div>
           <h1 className="text-3xl font-display font-bold text-foreground">
             User Login
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Enter your passkey to access the system
+            Enter your email and passkey to access the system
           </p>
         </div>
 
@@ -72,7 +126,7 @@ export default function UserLogin() {
               Authentication
             </CardTitle>
             <CardDescription>
-              Enter your passkey to log in as a user
+              Enter your registered email and passkey to log in
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -85,6 +139,20 @@ export default function UserLogin() {
               )}
 
               <div className="space-y-2">
+                <Label htmlFor="user-email">Email</Label>
+                <Input
+                  id="user-email"
+                  type="email"
+                  placeholder="Enter your email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  disabled={navigating}
+                  data-ocid="userlogin.input"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="user-passkey">Passkey</Label>
                 <Input
                   id="user-passkey"
@@ -94,7 +162,7 @@ export default function UserLogin() {
                   onChange={(e) => setPasskey(e.target.value)}
                   autoComplete="current-password"
                   disabled={navigating}
-                  data-ocid="userlogin.input"
+                  data-ocid="userlogin.passkey_input"
                 />
               </div>
 
@@ -102,7 +170,7 @@ export default function UserLogin() {
                 type="submit"
                 className="w-full gap-2"
                 size="lg"
-                disabled={navigating || !passkey}
+                disabled={navigating || !email || !passkey}
                 data-ocid="userlogin.primary_button"
               >
                 {navigating ? (
@@ -113,6 +181,39 @@ export default function UserLogin() {
                 {navigating ? "Logging in..." : "Login"}
               </Button>
             </form>
+
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">or</span>
+              </div>
+            </div>
+
+            {/* ICP Internet Identity Login */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2"
+              size="lg"
+              onClick={iiLogin}
+              disabled={isLoggingIn || navigating}
+              data-ocid="userlogin.icp_identity_button"
+            >
+              {isLoggingIn ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="w-4 h-4" />
+              )}
+              {isLoggingIn ? "Connecting..." : "Login with Internet Identity"}
+            </Button>
+
+            <p className="text-center text-xs text-muted-foreground mt-3">
+              Internet Identity uses your device passkey or biometrics for
+              secure, non-anonymous login.
+            </p>
           </CardContent>
         </Card>
 

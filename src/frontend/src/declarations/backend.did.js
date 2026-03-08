@@ -37,24 +37,35 @@ export const AMCPart = IDL.Record({
   'warrantyExpiry' : IDL.Opt(IDL.Int),
   'quantity' : IDL.Nat,
 });
+export const ComplaintStatus = IDL.Variant({
+  'resolved' : IDL.Null,
+  'open' : IDL.Null,
+  'inProgress' : IDL.Null,
+});
+export const Priority = IDL.Variant({
+  'low' : IDL.Null,
+  'high' : IDL.Null,
+  'medium' : IDL.Null,
+});
 export const Complaint = IDL.Record({
   'id' : IDL.Text,
-  'status' : IDL.Variant({
-    'resolved' : IDL.Null,
-    'open' : IDL.Null,
-    'inProgress' : IDL.Null,
-  }),
+  'status' : ComplaintStatus,
+  'caseClearedDate' : IDL.Opt(IDL.Int),
   'computerId' : IDL.Opt(IDL.Text),
   'createdAt' : IDL.Int,
+  'spareTakenDate' : IDL.Opt(IDL.Int),
+  'unit' : IDL.Text,
   'description' : IDL.Text,
+  'sparesTaken' : IDL.Text,
+  'extraCol1' : IDL.Text,
+  'extraCol2' : IDL.Text,
   'sectionId' : IDL.Opt(IDL.Text),
   'reportedBy' : IDL.Text,
-  'priority' : IDL.Variant({
-    'low' : IDL.Null,
-    'high' : IDL.Null,
-    'medium' : IDL.Null,
-  }),
+  'amcTeam' : IDL.Text,
+  'priority' : Priority,
+  'caseAttendedDate' : IDL.Opt(IDL.Int),
   'resolvedAt' : IDL.Opt(IDL.Int),
+  'unitSlNo' : IDL.Text,
 });
 export const ExternalBlob = IDL.Vec(IDL.Nat8);
 export const Computer = IDL.Record({
@@ -171,13 +182,7 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getComplaintsByStatus' : IDL.Func(
-      [
-        IDL.Variant({
-          'resolved' : IDL.Null,
-          'open' : IDL.Null,
-          'inProgress' : IDL.Null,
-        }),
-      ],
+      [ComplaintStatus],
       [IDL.Vec(Complaint)],
       ['query'],
     ),
@@ -258,24 +263,35 @@ export const idlFactory = ({ IDL }) => {
     'warrantyExpiry' : IDL.Opt(IDL.Int),
     'quantity' : IDL.Nat,
   });
+  const ComplaintStatus = IDL.Variant({
+    'resolved' : IDL.Null,
+    'open' : IDL.Null,
+    'inProgress' : IDL.Null,
+  });
+  const Priority = IDL.Variant({
+    'low' : IDL.Null,
+    'high' : IDL.Null,
+    'medium' : IDL.Null,
+  });
   const Complaint = IDL.Record({
     'id' : IDL.Text,
-    'status' : IDL.Variant({
-      'resolved' : IDL.Null,
-      'open' : IDL.Null,
-      'inProgress' : IDL.Null,
-    }),
+    'status' : ComplaintStatus,
+    'caseClearedDate' : IDL.Opt(IDL.Int),
     'computerId' : IDL.Opt(IDL.Text),
     'createdAt' : IDL.Int,
+    'spareTakenDate' : IDL.Opt(IDL.Int),
+    'unit' : IDL.Text,
     'description' : IDL.Text,
+    'sparesTaken' : IDL.Text,
+    'extraCol1' : IDL.Text,
+    'extraCol2' : IDL.Text,
     'sectionId' : IDL.Opt(IDL.Text),
     'reportedBy' : IDL.Text,
-    'priority' : IDL.Variant({
-      'low' : IDL.Null,
-      'high' : IDL.Null,
-      'medium' : IDL.Null,
-    }),
+    'amcTeam' : IDL.Text,
+    'priority' : Priority,
+    'caseAttendedDate' : IDL.Opt(IDL.Int),
     'resolvedAt' : IDL.Opt(IDL.Int),
+    'unitSlNo' : IDL.Text,
   });
   const ExternalBlob = IDL.Vec(IDL.Nat8);
   const Computer = IDL.Record({
@@ -392,13 +408,7 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getComplaintsByStatus' : IDL.Func(
-        [
-          IDL.Variant({
-            'resolved' : IDL.Null,
-            'open' : IDL.Null,
-            'inProgress' : IDL.Null,
-          }),
-        ],
+        [ComplaintStatus],
         [IDL.Vec(Complaint)],
         ['query'],
       ),

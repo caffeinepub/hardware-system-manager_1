@@ -3,6 +3,7 @@ import { type ReactNode, createContext, useContext, useState } from "react";
 
 const SESSION_KEY = "hw_admin";
 const ROLE_KEY = "hw_role";
+const EMAIL_KEY = "hw_user_email";
 // This key is read by useActor.ts via getSecretParameter("caffeineAdminToken")
 const ACTOR_TOKEN_KEY = "caffeineAdminToken";
 
@@ -11,29 +12,46 @@ export type UserRole = "admin" | "user" | null;
 interface AdminContextType {
   isAdmin: boolean;
   isLoggedIn: boolean;
+  isAuthorized: boolean;
   role: UserRole;
-  login: (role: "admin" | "user", token: string) => void;
+  userEmail: string | null;
+  login: (role: "admin" | "user", token: string, email?: string) => void;
   logout: () => void;
 }
 
 const AdminContext = createContext<AdminContextType>({
   isAdmin: false,
   isLoggedIn: false,
+  isAuthorized: false,
   role: null,
+  userEmail: null,
   login: () => {},
   logout: () => {},
 });
+
+// Authorized user credentials
+const AUTHORIZED_EMAIL = "anandsreedharamhome@gmail.com";
+// Special marker for ICP Internet Identity logins
+export const ICP_IDENTITY_MARKER = "icp-identity-authorized";
 
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole>(() => {
     return (localStorage.getItem(ROLE_KEY) as UserRole) ?? null;
   });
 
-  const login = (newRole: "admin" | "user", token: string) => {
+  const [userEmail, setUserEmail] = useState<string | null>(() => {
+    return localStorage.getItem(EMAIL_KEY) ?? null;
+  });
+
+  const login = (newRole: "admin" | "user", token: string, email?: string) => {
     // Store token in sessionStorage so useActor picks it up via getSecretParameter
     sessionStorage.setItem(ACTOR_TOKEN_KEY, token);
     localStorage.setItem(SESSION_KEY, "true");
     localStorage.setItem(ROLE_KEY, newRole);
+    if (email) {
+      localStorage.setItem(EMAIL_KEY, email);
+      setUserEmail(email);
+    }
     setRole(newRole);
   };
 
@@ -41,14 +59,31 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(ACTOR_TOKEN_KEY);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(ROLE_KEY);
+    localStorage.removeItem(EMAIL_KEY);
     setRole(null);
+    setUserEmail(null);
   };
 
   const isAdmin = role === "admin";
   const isLoggedIn = role !== null;
+  // Authorized = logged in as the specific authorized user (email or ICP identity)
+  const isAuthorized =
+    isAdmin ||
+    (role === "user" && userEmail === AUTHORIZED_EMAIL) ||
+    (role === "user" && userEmail === ICP_IDENTITY_MARKER);
 
   return (
-    <AdminContext.Provider value={{ isAdmin, isLoggedIn, role, login, logout }}>
+    <AdminContext.Provider
+      value={{
+        isAdmin,
+        isLoggedIn,
+        isAuthorized,
+        role,
+        userEmail,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AdminContext.Provider>
   );

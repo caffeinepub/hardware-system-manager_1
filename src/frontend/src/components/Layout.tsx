@@ -5,6 +5,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Building2,
+  CheckCircle2,
   ChevronRight,
   Database,
   LayoutDashboard,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useAdmin } from "../contexts/AdminContext";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -32,7 +34,9 @@ const navItems = [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { isAdmin, isLoggedIn, role, logout } = useAdmin();
+  const { isAdmin, isLoggedIn, isAuthorized, role, userEmail, logout } =
+    useAdmin();
+  const { clear: clearIIIdentity } = useInternetIdentity();
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
 
@@ -116,20 +120,37 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-sidebar-border space-y-1">
           {/* Role badge */}
           {isLoggedIn && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-sidebar-accent/60 mb-2">
-              {isAdmin ? (
-                <ShieldCheck className="w-3.5 h-3.5 text-sidebar-primary" />
-              ) : (
-                <User className="w-3.5 h-3.5 text-blue-400" />
-              )}
-              <span
-                className={cn(
-                  "text-xs font-semibold",
-                  isAdmin ? "text-sidebar-primary" : "text-blue-400",
+            <div className="flex flex-col gap-1 px-3 py-2 rounded-md bg-sidebar-accent/60 mb-2">
+              <div className="flex items-center gap-2">
+                {isAdmin ? (
+                  <ShieldCheck className="w-3.5 h-3.5 text-sidebar-primary flex-shrink-0" />
+                ) : isAuthorized ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                ) : (
+                  <User className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
                 )}
-              >
-                {isAdmin ? "Admin Mode" : "User Mode"}
-              </span>
+                <span
+                  className={cn(
+                    "text-xs font-semibold",
+                    isAdmin
+                      ? "text-sidebar-primary"
+                      : isAuthorized
+                        ? "text-green-400"
+                        : "text-blue-400",
+                  )}
+                >
+                  {isAdmin
+                    ? "Admin Mode"
+                    : isAuthorized
+                      ? "Authorized User"
+                      : "User Mode"}
+                </span>
+              </div>
+              {!isAdmin && userEmail && (
+                <p className="text-[10px] text-sidebar-foreground/50 truncate pl-5">
+                  {userEmail}
+                </p>
+              )}
             </div>
           )}
 
@@ -138,7 +159,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               size="sm"
               variant="ghost"
               className="w-full justify-start gap-2 text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10"
-              onClick={logout}
+              onClick={() => {
+                logout();
+                clearIIIdentity();
+              }}
               data-ocid="nav.logout.button"
             >
               <LogOut className="w-4 h-4" />
@@ -205,7 +229,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               Admin
             </Badge>
           )}
-          {!isAdmin && role === "user" && (
+          {!isAdmin && role === "user" && isAuthorized && (
+            <Badge className="bg-green-500/10 text-green-500 border border-green-500/20 hidden sm:flex">
+              <CheckCircle2 className="w-3 h-3 mr-1" />
+              Authorized
+            </Badge>
+          )}
+          {!isAdmin && role === "user" && !isAuthorized && (
             <Badge className="bg-blue-500/10 text-blue-500 border border-blue-500/20 hidden sm:flex">
               <User className="w-3 h-3 mr-1" />
               User

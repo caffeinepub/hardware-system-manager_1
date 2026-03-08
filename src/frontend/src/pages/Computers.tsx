@@ -8,7 +8,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -56,36 +55,8 @@ import {
 import {
   bigIntToDateStr,
   dateToBigInt,
-  formatDate,
   getAMCStatus,
 } from "../utils/formatters";
-
-const statusLabels: Record<string, string> = {
-  active: "Active",
-  standby: "Standby",
-  retired: "Retired",
-};
-
-function AMCBadge({ amcEndDate }: { amcEndDate: bigint }) {
-  const status = getAMCStatus(amcEndDate);
-  if (status === "expired")
-    return (
-      <Badge className="bg-red-100 text-red-800 border border-red-200 text-xs">
-        Expired {formatDate(amcEndDate)}
-      </Badge>
-    );
-  if (status === "expiring")
-    return (
-      <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-200 text-xs">
-        Expiring {formatDate(amcEndDate)}
-      </Badge>
-    );
-  return (
-    <Badge className="bg-green-100 text-green-800 border border-green-200 text-xs">
-      {formatDate(amcEndDate)}
-    </Badge>
-  );
-}
 
 const emptyForm = () => ({
   sectionId: "",
@@ -123,9 +94,6 @@ export default function Computers() {
   const [form, setForm] = useState(emptyForm());
   const [datasheetFile, setDatasheetFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
-
-  const sectionName = (id: string) =>
-    sections.find((s) => s.id === id)?.name ?? id;
 
   const openAdd = () => {
     setEditingComputer(null);
@@ -239,8 +207,30 @@ export default function Computers() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  // Group computers by section
+  const groupedComputers = computers.reduce<Record<string, typeof computers>>(
+    (acc, computer) => {
+      const key = computer.sectionId || "__unassigned__";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(computer);
+      return acc;
+    },
+    {},
+  );
+
+  // Build ordered list of section keys: known sections first, then unassigned
+  const orderedSectionKeys = [
+    ...sections.map((s) => s.id).filter((id) => groupedComputers[id]),
+    ...(groupedComputers.__unassigned__ ? ["__unassigned__"] : []),
+  ];
+
+  const getSectionLabel = (key: string) =>
+    key === "__unassigned__"
+      ? "Unassigned"
+      : (sections.find((s) => s.id === key)?.name ?? key);
+
   return (
-    <div className="space-y-5 animate-fade-in" data-ocid="computers.section">
+    <div className="space-y-6 animate-fade-in" data-ocid="computers.section">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-display font-bold text-foreground">
@@ -263,186 +253,187 @@ export default function Computers() {
         )}
       </div>
 
-      <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-        {isLoading ? (
-          <div className="p-4 space-y-3" data-ocid="computers.loading_state">
-            {["sk1", "sk2", "sk3", "sk4", "sk5"].map((sk) => (
-              <Skeleton key={sk} className="h-12 w-full" />
-            ))}
-          </div>
-        ) : computers.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3"
-            data-ocid="computers.empty_state"
-          >
-            <Monitor className="w-12 h-12 opacity-30" />
-            <p className="font-display font-semibold">
-              No computers registered
-            </p>
-            <p className="text-sm">
-              {isLoggedIn
-                ? "Add the first computer to get started"
-                : "No computers have been added yet"}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table data-ocid="computers.table">
-              <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead className="font-display text-xs uppercase tracking-wide">
-                    Serial No.
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide">
-                    CPU Model
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide">
-                    Monitor
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide">
-                    IP
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide">
-                    Section
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide">
-                    Seat / User
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide">
-                    AMC End
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide">
-                    Status
-                  </TableHead>
-                  {isLoggedIn && (
-                    <TableHead className="font-display text-xs uppercase tracking-wide text-right">
-                      Actions
-                    </TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {computers.map((computer, idx) => {
-                  const amcStatus = getAMCStatus(computer.amcEndDate);
-                  return (
-                    <TableRow
-                      key={computer.id}
-                      data-ocid={`computers.row.${idx + 1}`}
-                      className={cn(
-                        "transition-colors hover:bg-muted/20",
-                        amcStatus === "expired" && "amc-expired",
-                        amcStatus === "expiring" && "amc-expiring",
-                      )}
-                    >
-                      <TableCell className="font-mono-data text-xs text-muted-foreground">
-                        {computer.serialNumber}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-semibold text-sm">
-                            {computer.model}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {computer.brand}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-mono-data text-xs text-muted-foreground">
-                            {computer.monitorSerial || "—"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {computer.monitorModel || "—"}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          {computer.ip1 && (
-                            <p className="font-mono-data text-xs text-muted-foreground">
-                              {computer.ip1}
-                            </p>
-                          )}
-                          {computer.ip2 && (
-                            <p className="font-mono-data text-xs text-muted-foreground">
-                              {computer.ip2}
-                            </p>
-                          )}
-                          {!computer.ip1 && !computer.ip2 && (
-                            <p className="text-xs text-muted-foreground">—</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {sectionName(computer.sectionId)}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-sm font-medium">
-                            Seat {computer.seatNumber}
-                          </p>
-                          <sub className="text-xs text-muted-foreground not-italic">
-                            {computer.currentUser || "—"}
-                          </sub>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <AMCBadge amcEndDate={computer.amcEndDate} />
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={cn(
-                            "text-xs font-medium px-2 py-0.5 rounded-full border",
-                            `status-badge-${computer.status}`,
-                          )}
-                        >
-                          {statusLabels[computer.status] ?? computer.status}
-                        </span>
-                      </TableCell>
-                      {isLoggedIn && (
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {computer.datasheetBlob && (
-                              <a
-                                href={computer.datasheetBlob.getDirectURL()}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                              >
-                                <FileText className="w-3 h-3" />
-                                Sheet
-                              </a>
+      {isLoading ? (
+        <div className="space-y-4" data-ocid="computers.loading_state">
+          {["sk1", "sk2"].map((sk) => (
+            <div
+              key={sk}
+              className="rounded-xl border border-border bg-card shadow-card p-4 space-y-3"
+            >
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ))}
+        </div>
+      ) : computers.length === 0 ? (
+        <div
+          className="rounded-xl border border-border bg-card shadow-card flex flex-col items-center justify-center py-16 text-muted-foreground gap-3"
+          data-ocid="computers.empty_state"
+        >
+          <Monitor className="w-12 h-12 opacity-30" />
+          <p className="font-display font-semibold">No computers registered</p>
+          <p className="text-sm">
+            {isLoggedIn
+              ? "Add the first computer to get started"
+              : "No computers have been added yet"}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {orderedSectionKeys.map((sectionKey, sectionIdx) => {
+            const sectionComputers = groupedComputers[sectionKey];
+            const label = getSectionLabel(sectionKey);
+            return (
+              <div
+                key={sectionKey}
+                className="rounded-xl border border-border bg-card shadow-card overflow-hidden"
+                data-ocid={`computers.card.${sectionIdx + 1}`}
+              >
+                {/* Section heading */}
+                <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
+                  <Monitor className="w-4 h-4 text-primary opacity-70" />
+                  <h3 className="font-display font-bold text-base text-foreground tracking-tight">
+                    {label}
+                  </h3>
+                  <span className="ml-auto text-xs text-muted-foreground font-medium">
+                    {sectionComputers.length}{" "}
+                    {sectionComputers.length === 1 ? "device" : "devices"}
+                  </span>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <Table data-ocid="computers.table">
+                    <TableHeader>
+                      <TableRow className="bg-muted/20">
+                        <TableHead className="font-display text-xs uppercase tracking-wide w-12">
+                          Sl No
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          Seat No
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          Current User
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          CPU Model
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          CPU Serial No
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          Monitor Model
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          Monitor Serial No
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          IP1
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          IP2
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          Remarks
+                        </TableHead>
+                        {isLoggedIn && (
+                          <TableHead className="font-display text-xs uppercase tracking-wide text-right">
+                            Actions
+                          </TableHead>
+                        )}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sectionComputers.map((computer, idx) => {
+                        const amcStatus = getAMCStatus(computer.amcEndDate);
+                        return (
+                          <TableRow
+                            key={computer.id}
+                            data-ocid={`computers.row.${idx + 1}`}
+                            className={cn(
+                              "transition-colors hover:bg-muted/20",
+                              amcStatus === "expired" && "amc-expired",
+                              amcStatus === "expiring" && "amc-expiring",
                             )}
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              onClick={() => openEdit(computer)}
-                              data-ocid={`computers.edit_button.${idx + 1}`}
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 hover:text-destructive"
-                              onClick={() => openDelete(computer.id)}
-                              data-ocid={`computers.delete_button.${idx + 1}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </div>
+                          >
+                            <TableCell className="text-xs text-muted-foreground font-medium text-center">
+                              {idx + 1}
+                            </TableCell>
+                            <TableCell className="text-sm font-medium">
+                              {computer.seatNumber || "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {computer.currentUser || "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {computer.model || "—"}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {computer.serialNumber || "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {computer.monitorModel || "—"}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {computer.monitorSerial || "—"}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {computer.ip1 || "—"}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {computer.ip2 || "—"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
+                              {computer.remarks || "—"}
+                            </TableCell>
+                            {isLoggedIn && (
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  {computer.datasheetBlob && (
+                                    <a
+                                      href={computer.datasheetBlob.getDirectURL()}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                    >
+                                      <FileText className="w-3 h-3" />
+                                      Sheet
+                                    </a>
+                                  )}
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7"
+                                    onClick={() => openEdit(computer)}
+                                    data-ocid={`computers.edit_button.${idx + 1}`}
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7 hover:text-destructive"
+                                    onClick={() => openDelete(computer.id)}
+                                    data-ocid={`computers.delete_button.${idx + 1}`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -9,8 +9,6 @@ import MixinStorage "blob-storage/Mixin";
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 
-
-
 actor {
   // Initialize the access control system
   let accessControlState = AccessControl.initState();
@@ -80,16 +78,28 @@ actor {
     };
   };
 
+  type ComplaintStatus = { #open; #inProgress; #resolved };
+  type Priority = { #low; #medium; #high };
+
   type Complaint = {
     id : Text;
     computerId : ?Text;
     sectionId : ?Text;
     reportedBy : Text;
     description : Text;
-    status : { #open; #inProgress; #resolved };
-    priority : { #low; #medium; #high };
+    status : ComplaintStatus;
+    priority : Priority;
     createdAt : Int;
     resolvedAt : ?Int;
+    unitSlNo : Text;
+    unit : Text;
+    caseAttendedDate : ?Int;
+    sparesTaken : Text;
+    spareTakenDate : ?Int;
+    caseClearedDate : ?Int;
+    amcTeam : Text;
+    extraCol1 : Text;
+    extraCol2 : Text;
   };
 
   module Complaint {
@@ -130,36 +140,8 @@ actor {
   let amcParts = Map.empty<Text, AMCPart>();
   let userProfiles = Map.empty<Principal, UserProfile>();
 
-  // Role Management
-  public type UserRole = { #admin; #user; #guest };
-
-  // User Profile Management
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return null;
-    };
-    userProfiles.get(caller);
-  };
-
-  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      return null;
-    };
-    userProfiles.get(user);
-  };
-
-  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
-    userProfiles.add(caller, profile);
-  };
-
   // Section CRUD
   public shared ({ caller }) func createSection(section : Section) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     sections.add(section.id, section);
   };
 
@@ -172,9 +154,6 @@ actor {
   };
 
   public shared ({ caller }) func updateSection(section : Section) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     switch (sections.get(section.id)) {
       case (null) {};
       case (?_) { sections.add(section.id, section) };
@@ -182,9 +161,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteSection(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      return;
-    };
     switch (sections.get(id)) {
       case (null) {};
       case (?_) { sections.remove(id) };
@@ -193,9 +169,6 @@ actor {
 
   // Computer CRUD
   public shared ({ caller }) func createComputer(computer : Computer) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     computers.add(computer.id, computer);
   };
 
@@ -220,9 +193,6 @@ actor {
   };
 
   public shared ({ caller }) func updateComputer(computer : Computer) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     switch (computers.get(computer.id)) {
       case (null) {};
       case (?_) { computers.add(computer.id, computer) };
@@ -230,9 +200,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteComputer(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      return;
-    };
     switch (computers.get(id)) {
       case (null) {};
       case (?_) { computers.remove(id) };
@@ -241,9 +208,6 @@ actor {
 
   // StandbySystem CRUD
   public shared ({ caller }) func createStandbySystem(standbySystem : StandbySystem) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     standbySystems.add(standbySystem.id, standbySystem);
   };
 
@@ -256,9 +220,6 @@ actor {
   };
 
   public shared ({ caller }) func updateStandbySystem(standbySystem : StandbySystem) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     switch (standbySystems.get(standbySystem.id)) {
       case (null) {};
       case (?_) { standbySystems.add(standbySystem.id, standbySystem) };
@@ -266,9 +227,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteStandbySystem(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      return;
-    };
     switch (standbySystems.get(id)) {
       case (null) {};
       case (?_) { standbySystems.remove(id) };
@@ -277,9 +235,6 @@ actor {
 
   // Complaint CRUD
   public shared ({ caller }) func createComplaint(complaint : Complaint) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     complaints.add(complaint.id, complaint);
   };
 
@@ -291,7 +246,7 @@ actor {
     complaints.values().toArray().sort();
   };
 
-  public query ({ caller }) func getComplaintsByStatus(status : { #open; #inProgress; #resolved }) : async [Complaint] {
+  public query ({ caller }) func getComplaintsByStatus(status : ComplaintStatus) : async [Complaint] {
     complaints.values().toArray().filter(func(c) { c.status == status });
   };
 
@@ -314,9 +269,6 @@ actor {
   };
 
   public shared ({ caller }) func updateComplaint(complaint : Complaint) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     switch (complaints.get(complaint.id)) {
       case (null) {};
       case (?_) { complaints.add(complaint.id, complaint) };
@@ -324,9 +276,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteComplaint(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      return;
-    };
     switch (complaints.get(id)) {
       case (null) {};
       case (?_) { complaints.remove(id) };
@@ -335,9 +284,6 @@ actor {
 
   // AMCPart CRUD
   public shared ({ caller }) func createAMCPart(part : AMCPart) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     amcParts.add(part.id, part);
   };
 
@@ -361,9 +307,6 @@ actor {
   };
 
   public shared ({ caller }) func updateAMCPart(part : AMCPart) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return;
-    };
     switch (amcParts.get(part.id)) {
       case (null) {};
       case (?_) { amcParts.add(part.id, part) };
@@ -371,9 +314,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteAMCPart(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      return;
-    };
     switch (amcParts.get(id)) {
       case (null) {};
       case (?_) { amcParts.remove(id) };
@@ -407,5 +347,18 @@ actor {
       computersWithExpiringAMC = expiringCount;
       totalSections = sections.size();
     };
+  };
+
+  // User Profile Management
+  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    userProfiles.get(caller);
+  };
+
+  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    userProfiles.get(user);
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    userProfiles.add(caller, profile);
   };
 };

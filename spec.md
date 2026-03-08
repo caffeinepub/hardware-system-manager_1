@@ -1,21 +1,32 @@
 # Hardware System Manager
 
 ## Current State
-The app has a full backend (main.mo) with Section, Computer, StandbySystem, and Complaint CRUD operations. However, all write operations have AccessControl.hasPermission guards that silently reject anonymous callers (passkey users). The frontend uses passkey login which sends all backend calls as anonymous ICP principals. As a result, all creates, updates, and deletes succeed on the frontend but are silently discarded by the backend.
+- User Login page uses email + passkey ("Mainuser123") as a frontend-only password check. The backend still sees an anonymous caller.
+- Admin Login page uses passkey "Kpsckkdadmin" -- same frontend-only approach.
+- `useInternetIdentity` hook and `InternetIdentityProvider` are present in the codebase but not wired into any login UI.
+- `useActor` creates an authenticated actor when an ICP identity is present.
+- `AdminContext` tracks `role`, `userEmail`, `isAuthorized`, `isAdmin`.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new to add
+- "Login with Internet Identity" button on the User Login page (below existing email+passkey form, separated by "or").
+- When ICP Internet Identity login succeeds, treat the user as an "Authorized User" (non-anonymous, full edit access) -- same as the email+passkey path.
+- `InternetIdentityProvider` wrapper in App.tsx so the `useInternetIdentity` hook is available app-wide.
+- On successful II login, call `login("user", ...)` in AdminContext so the sidebar shows "Authorized User" badge.
+- On logout, also call `clear()` from `useInternetIdentity` to clear the ICP session.
 
 ### Modify
-- Backend main.mo: Remove all AccessControl.hasPermission and AccessControl.isAdmin guards from all write operations (createSection, updateSection, deleteSection, createComputer, updateComputer, deleteComputer, createStandbySystem, updateStandbySystem, deleteStandbySystem, createComplaint, updateComplaint, deleteComplaint). All write operations must accept calls from any caller including anonymous.
-- Keep MixinAuthorization included (required by framework) but do not use its permission checks in data operations.
+- `App.tsx`: Wrap root with `InternetIdentityProvider`.
+- `UserLogin.tsx`: Add ICP Internet Identity login button using `useInternetIdentity`. On success callback, call `login("user", "ii-identity", email_or_principal)` and navigate to dashboard.
+- `AdminContext.tsx` / `Layout.tsx`: On logout, also clear the ICP identity (call `clear()`).
+- Keep existing email+passkey login intact -- ICP II is an additional option.
 
 ### Remove
-- All `if (not (AccessControl.hasPermission(...))) { return; }` guards from write operations
+- Nothing removed.
 
 ## Implementation Plan
-1. Regenerate backend via generate_motoko_code with all write operations open to any caller (no permission checks)
-2. Validate frontend builds successfully
-3. Deploy
+1. Wrap `App.tsx` root with `InternetIdentityProvider` (import from `./hooks/useInternetIdentity`).
+2. In `UserLogin.tsx`, import and use `useInternetIdentity`. Add an "or" divider and "Login with Internet Identity" button. On II login success (watch `isLoginSuccess`), call `login("user", "ii-identity", principalString)` and navigate to "/".
+3. In `Layout.tsx`, import `useInternetIdentity`, call `clear()` alongside `logout()` when the logout button is clicked.
+4. Validate and build.

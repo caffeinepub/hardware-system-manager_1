@@ -5,8 +5,8 @@ import type {
   Computer,
   Section,
   StandbySystem,
-  Variant_resolved_open_inProgress,
 } from "../backend";
+import type { ComplaintStatus } from "../backend";
 import { useActor } from "./useActor";
 
 // ─── Sections ────────────────────────────────────────────────────────────────
@@ -197,9 +197,7 @@ export function useGetAllComplaints() {
   });
 }
 
-export function useGetComplaintsByStatus(
-  status: Variant_resolved_open_inProgress,
-) {
+export function useGetComplaintsByStatus(status: ComplaintStatus) {
   const { actor, isFetching } = useActor();
   return useQuery<Complaint[]>({
     queryKey: ["complaints", "status", status],
