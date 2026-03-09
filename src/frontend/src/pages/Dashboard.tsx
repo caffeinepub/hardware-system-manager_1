@@ -165,7 +165,7 @@ export default function Dashboard() {
           loading={isLoading}
         />
         <StatCard
-          title="Total Computers"
+          title="Total Systems (Pairs)"
           value={isLoading ? "—" : Number(stats?.totalComputers ?? 0)}
           icon={Monitor}
           color="bg-teal-100 text-teal-700"
@@ -366,7 +366,7 @@ export default function Dashboard() {
                     color: "bg-primary",
                   },
                   {
-                    label: "Computers active",
+                    label: "Systems active",
                     val: computers.filter((c) => c.status === "active").length,
                     max: Math.max(computers.length, 1),
                     color: "bg-teal-500",

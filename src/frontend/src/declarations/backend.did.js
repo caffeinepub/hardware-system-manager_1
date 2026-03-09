@@ -121,7 +121,22 @@ export const StandbySystem = IDL.Record({
     'poor' : IDL.Null,
   }),
 });
+export const StockEntry = IDL.Record({
+  'id' : IDL.Text,
+  'createdAt' : IDL.Int,
+  'slNo' : IDL.Nat,
+  'monitorSlNo' : IDL.Text,
+  'cpuSlNo' : IDL.Text,
+  'amcExpiryDate' : IDL.Int,
+  'amcTeam' : IDL.Text,
+  'companyAndModel' : IDL.Text,
+  'amcStartDate' : IDL.Int,
+});
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
+export const ProcessStockEntriesResult = IDL.Record({
+  'updated' : IDL.Nat,
+  'addedToStandby' : IDL.Nat,
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -157,17 +172,20 @@ export const idlService = IDL.Service({
   'createComputer' : IDL.Func([Computer], [], []),
   'createSection' : IDL.Func([Section], [], []),
   'createStandbySystem' : IDL.Func([StandbySystem], [], []),
+  'createStockEntry' : IDL.Func([StockEntry], [], []),
   'deleteAMCPart' : IDL.Func([IDL.Text], [], []),
   'deleteComplaint' : IDL.Func([IDL.Text], [], []),
   'deleteComputer' : IDL.Func([IDL.Text], [], []),
   'deleteSection' : IDL.Func([IDL.Text], [], []),
   'deleteStandbySystem' : IDL.Func([IDL.Text], [], []),
+  'deleteStockEntry' : IDL.Func([IDL.Text], [], []),
   'getAMCPart' : IDL.Func([IDL.Text], [IDL.Opt(AMCPart)], ['query']),
   'getAllAMCParts' : IDL.Func([], [IDL.Vec(AMCPart)], ['query']),
   'getAllComplaints' : IDL.Func([], [IDL.Vec(Complaint)], ['query']),
   'getAllComputers' : IDL.Func([], [IDL.Vec(Computer)], ['query']),
   'getAllSections' : IDL.Func([], [IDL.Vec(Section)], ['query']),
   'getAllStandbySystems' : IDL.Func([], [IDL.Vec(StandbySystem)], ['query']),
+  'getAllStockEntries' : IDL.Func([], [IDL.Vec(StockEntry)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getComplaint' : IDL.Func([IDL.Text], [IDL.Opt(Complaint)], ['query']),
@@ -223,12 +241,14 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'processStockEntries' : IDL.Func([], [ProcessStockEntriesResult], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'updateAMCPart' : IDL.Func([AMCPart], [], []),
   'updateComplaint' : IDL.Func([Complaint], [], []),
   'updateComputer' : IDL.Func([Computer], [], []),
   'updateSection' : IDL.Func([Section], [], []),
   'updateStandbySystem' : IDL.Func([StandbySystem], [], []),
+  'updateStockEntry' : IDL.Func([StockEntry], [], []),
 });
 
 export const idlInitArgs = [];
@@ -347,7 +367,22 @@ export const idlFactory = ({ IDL }) => {
       'poor' : IDL.Null,
     }),
   });
+  const StockEntry = IDL.Record({
+    'id' : IDL.Text,
+    'createdAt' : IDL.Int,
+    'slNo' : IDL.Nat,
+    'monitorSlNo' : IDL.Text,
+    'cpuSlNo' : IDL.Text,
+    'amcExpiryDate' : IDL.Int,
+    'amcTeam' : IDL.Text,
+    'companyAndModel' : IDL.Text,
+    'amcStartDate' : IDL.Int,
+  });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
+  const ProcessStockEntriesResult = IDL.Record({
+    'updated' : IDL.Nat,
+    'addedToStandby' : IDL.Nat,
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -383,17 +418,20 @@ export const idlFactory = ({ IDL }) => {
     'createComputer' : IDL.Func([Computer], [], []),
     'createSection' : IDL.Func([Section], [], []),
     'createStandbySystem' : IDL.Func([StandbySystem], [], []),
+    'createStockEntry' : IDL.Func([StockEntry], [], []),
     'deleteAMCPart' : IDL.Func([IDL.Text], [], []),
     'deleteComplaint' : IDL.Func([IDL.Text], [], []),
     'deleteComputer' : IDL.Func([IDL.Text], [], []),
     'deleteSection' : IDL.Func([IDL.Text], [], []),
     'deleteStandbySystem' : IDL.Func([IDL.Text], [], []),
+    'deleteStockEntry' : IDL.Func([IDL.Text], [], []),
     'getAMCPart' : IDL.Func([IDL.Text], [IDL.Opt(AMCPart)], ['query']),
     'getAllAMCParts' : IDL.Func([], [IDL.Vec(AMCPart)], ['query']),
     'getAllComplaints' : IDL.Func([], [IDL.Vec(Complaint)], ['query']),
     'getAllComputers' : IDL.Func([], [IDL.Vec(Computer)], ['query']),
     'getAllSections' : IDL.Func([], [IDL.Vec(Section)], ['query']),
     'getAllStandbySystems' : IDL.Func([], [IDL.Vec(StandbySystem)], ['query']),
+    'getAllStockEntries' : IDL.Func([], [IDL.Vec(StockEntry)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getComplaint' : IDL.Func([IDL.Text], [IDL.Opt(Complaint)], ['query']),
@@ -449,12 +487,14 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'processStockEntries' : IDL.Func([], [ProcessStockEntriesResult], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'updateAMCPart' : IDL.Func([AMCPart], [], []),
     'updateComplaint' : IDL.Func([Complaint], [], []),
     'updateComputer' : IDL.Func([Computer], [], []),
     'updateSection' : IDL.Func([Section], [], []),
     'updateStandbySystem' : IDL.Func([StandbySystem], [], []),
+    'updateStockEntry' : IDL.Func([StockEntry], [], []),
   });
 };
 

@@ -89,63 +89,23 @@ export class ExternalBlob {
         return this;
     }
 }
-export interface AMCPart {
+export interface StockEntry {
     id: string;
-    associatedComputerId?: string;
-    purchaseDate: bigint;
-    associatedSectionId?: string;
-    partNumber: string;
-    supplier: string;
     createdAt: bigint;
-    partName: string;
-    notes: string;
-    warrantyExpiry?: bigint;
-    quantity: bigint;
+    slNo: bigint;
+    monitorSlNo: string;
+    cpuSlNo: string;
+    amcExpiryDate: bigint;
+    amcTeam: string;
+    companyAndModel: string;
+    amcStartDate: bigint;
 }
 export interface _CaffeineStorageRefillInformation {
     proposed_top_up_amount?: bigint;
 }
-export interface StandbySystem {
-    id: string;
-    status: Variant_available_inUse_retired;
-    model: string;
-    createdAt: bigint;
-    assignedSectionId?: string;
-    serialNumber: string;
-    notes: string;
-    brand: string;
-    condition: Variant_fair_good_poor;
-}
-export interface Complaint {
-    id: string;
-    status: ComplaintStatus;
-    caseClearedDate?: bigint;
-    computerId?: string;
-    createdAt: bigint;
-    spareTakenDate?: bigint;
-    unit: string;
-    description: string;
-    sparesTaken: string;
-    extraCol1: string;
-    extraCol2: string;
-    sectionId?: string;
-    reportedBy: string;
-    amcTeam: string;
-    priority: Priority;
-    caseAttendedDate?: bigint;
-    resolvedAt?: bigint;
-    unitSlNo: string;
-}
 export interface _CaffeineStorageCreateCertificateResult {
     method: string;
     blob_hash: string;
-}
-export interface Section {
-    id: string;
-    name: string;
-    createdAt: bigint;
-    description: string;
-    location: string;
 }
 export interface Computer {
     id: string;
@@ -170,12 +130,67 @@ export interface Computer {
     seatNumber: string;
     monitorSerial: string;
 }
-export interface UserProfile {
+export interface ProcessStockEntriesResult {
+    updated: bigint;
+    addedToStandby: bigint;
+}
+export interface Complaint {
+    id: string;
+    status: ComplaintStatus;
+    caseClearedDate?: bigint;
+    computerId?: string;
+    createdAt: bigint;
+    spareTakenDate?: bigint;
+    unit: string;
+    description: string;
+    sparesTaken: string;
+    extraCol1: string;
+    extraCol2: string;
+    sectionId?: string;
+    reportedBy: string;
+    amcTeam: string;
+    priority: Priority;
+    caseAttendedDate?: bigint;
+    resolvedAt?: bigint;
+    unitSlNo: string;
+}
+export interface StandbySystem {
+    id: string;
+    status: Variant_available_inUse_retired;
+    model: string;
+    createdAt: bigint;
+    assignedSectionId?: string;
+    serialNumber: string;
+    notes: string;
+    brand: string;
+    condition: Variant_fair_good_poor;
+}
+export interface AMCPart {
+    id: string;
+    associatedComputerId?: string;
+    purchaseDate: bigint;
+    associatedSectionId?: string;
+    partNumber: string;
+    supplier: string;
+    createdAt: bigint;
+    partName: string;
+    notes: string;
+    warrantyExpiry?: bigint;
+    quantity: bigint;
+}
+export interface Section {
+    id: string;
     name: string;
+    createdAt: bigint;
+    description: string;
+    location: string;
 }
 export interface _CaffeineStorageRefillResult {
     success?: boolean;
     topped_up_amount?: bigint;
+}
+export interface UserProfile {
+    name: string;
 }
 export enum ComplaintStatus {
     resolved = "resolved",
@@ -221,17 +236,20 @@ export interface backendInterface {
     createComputer(computer: Computer): Promise<void>;
     createSection(section: Section): Promise<void>;
     createStandbySystem(standbySystem: StandbySystem): Promise<void>;
+    createStockEntry(entry: StockEntry): Promise<void>;
     deleteAMCPart(id: string): Promise<void>;
     deleteComplaint(id: string): Promise<void>;
     deleteComputer(id: string): Promise<void>;
     deleteSection(id: string): Promise<void>;
     deleteStandbySystem(id: string): Promise<void>;
+    deleteStockEntry(id: string): Promise<void>;
     getAMCPart(id: string): Promise<AMCPart | null>;
     getAllAMCParts(): Promise<Array<AMCPart>>;
     getAllComplaints(): Promise<Array<Complaint>>;
     getAllComputers(): Promise<Array<Computer>>;
     getAllSections(): Promise<Array<Section>>;
     getAllStandbySystems(): Promise<Array<StandbySystem>>;
+    getAllStockEntries(): Promise<Array<StockEntry>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getComplaint(id: string): Promise<Complaint | null>;
@@ -253,12 +271,14 @@ export interface backendInterface {
     getStandbySystem(id: string): Promise<StandbySystem | null>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
+    processStockEntries(): Promise<ProcessStockEntriesResult>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     updateAMCPart(part: AMCPart): Promise<void>;
     updateComplaint(complaint: Complaint): Promise<void>;
     updateComputer(computer: Computer): Promise<void>;
     updateSection(section: Section): Promise<void>;
     updateStandbySystem(standbySystem: StandbySystem): Promise<void>;
+    updateStockEntry(entry: StockEntry): Promise<void>;
 }
 import type { AMCPart as _AMCPart, Complaint as _Complaint, ComplaintStatus as _ComplaintStatus, Computer as _Computer, ExternalBlob as _ExternalBlob, Priority as _Priority, Section as _Section, StandbySystem as _StandbySystem, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -445,6 +465,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async createStockEntry(arg0: StockEntry): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.createStockEntry(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.createStockEntry(arg0);
+            return result;
+        }
+    }
     async deleteAMCPart(arg0: string): Promise<void> {
         if (this.processError) {
             try {
@@ -512,6 +546,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.deleteStandbySystem(arg0);
+            return result;
+        }
+    }
+    async deleteStockEntry(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteStockEntry(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteStockEntry(arg0);
             return result;
         }
     }
@@ -597,6 +645,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getAllStandbySystems();
             return from_candid_vec_n45(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getAllStockEntries(): Promise<Array<StockEntry>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAllStockEntries();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAllStockEntries();
+            return result;
         }
     }
     async getCallerUserProfile(): Promise<UserProfile | null> {
@@ -815,6 +877,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async processStockEntries(): Promise<ProcessStockEntriesResult> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.processStockEntries();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.processStockEntries();
+            return result;
+        }
+    }
     async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
         if (this.processError) {
             try {
@@ -896,6 +972,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.updateStandbySystem(to_candid_StandbySystem_n22(this._uploadFile, this._downloadFile, arg0));
+            return result;
+        }
+    }
+    async updateStockEntry(arg0: StockEntry): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateStockEntry(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateStockEntry(arg0);
             return result;
         }
     }

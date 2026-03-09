@@ -75,6 +75,10 @@ export type ExternalBlob = Uint8Array;
 export type Priority = { 'low' : null } |
   { 'high' : null } |
   { 'medium' : null };
+export interface ProcessStockEntriesResult {
+  'updated' : bigint,
+  'addedToStandby' : bigint,
+}
 export interface Section {
   'id' : string,
   'name' : string,
@@ -96,6 +100,17 @@ export interface StandbySystem {
   'condition' : { 'fair' : null } |
     { 'good' : null } |
     { 'poor' : null },
+}
+export interface StockEntry {
+  'id' : string,
+  'createdAt' : bigint,
+  'slNo' : bigint,
+  'monitorSlNo' : string,
+  'cpuSlNo' : string,
+  'amcExpiryDate' : bigint,
+  'amcTeam' : string,
+  'companyAndModel' : string,
+  'amcStartDate' : bigint,
 }
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
@@ -135,17 +150,20 @@ export interface _SERVICE {
   'createComputer' : ActorMethod<[Computer], undefined>,
   'createSection' : ActorMethod<[Section], undefined>,
   'createStandbySystem' : ActorMethod<[StandbySystem], undefined>,
+  'createStockEntry' : ActorMethod<[StockEntry], undefined>,
   'deleteAMCPart' : ActorMethod<[string], undefined>,
   'deleteComplaint' : ActorMethod<[string], undefined>,
   'deleteComputer' : ActorMethod<[string], undefined>,
   'deleteSection' : ActorMethod<[string], undefined>,
   'deleteStandbySystem' : ActorMethod<[string], undefined>,
+  'deleteStockEntry' : ActorMethod<[string], undefined>,
   'getAMCPart' : ActorMethod<[string], [] | [AMCPart]>,
   'getAllAMCParts' : ActorMethod<[], Array<AMCPart>>,
   'getAllComplaints' : ActorMethod<[], Array<Complaint>>,
   'getAllComputers' : ActorMethod<[], Array<Computer>>,
   'getAllSections' : ActorMethod<[], Array<Section>>,
   'getAllStandbySystems' : ActorMethod<[], Array<StandbySystem>>,
+  'getAllStockEntries' : ActorMethod<[], Array<StockEntry>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getComplaint' : ActorMethod<[string], [] | [Complaint]>,
@@ -170,12 +188,14 @@ export interface _SERVICE {
   'getStandbySystem' : ActorMethod<[string], [] | [StandbySystem]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'processStockEntries' : ActorMethod<[], ProcessStockEntriesResult>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'updateAMCPart' : ActorMethod<[AMCPart], undefined>,
   'updateComplaint' : ActorMethod<[Complaint], undefined>,
   'updateComputer' : ActorMethod<[Computer], undefined>,
   'updateSection' : ActorMethod<[Section], undefined>,
   'updateStandbySystem' : ActorMethod<[StandbySystem], undefined>,
+  'updateStockEntry' : ActorMethod<[StockEntry], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

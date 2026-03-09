@@ -3,6 +3,7 @@ import Array "mo:core/Array";
 import Int "mo:core/Int";
 import Order "mo:core/Order";
 import Time "mo:core/Time";
+import Text "mo:core/Text";
 import Principal "mo:core/Principal";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
@@ -10,9 +11,10 @@ import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 
 actor {
-  // Initialize the access control system
+  // user system
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
+
   include MixinStorage();
 
   // Types
@@ -22,12 +24,6 @@ actor {
     description : Text;
     location : Text;
     createdAt : Int;
-  };
-
-  module Section {
-    public func compare(section1 : Section, section2 : Section) : Order.Order {
-      section1.id.compare(section2.id);
-    };
   };
 
   type Computer = {
@@ -54,12 +50,6 @@ actor {
     amcCompany : Text;
   };
 
-  module Computer {
-    public func compare(computer1 : Computer, computer2 : Computer) : Order.Order {
-      computer1.id.compare(computer2.id);
-    };
-  };
-
   type StandbySystem = {
     id : Text;
     serialNumber : Text;
@@ -70,12 +60,6 @@ actor {
     assignedSectionId : ?Text;
     notes : Text;
     createdAt : Int;
-  };
-
-  module StandbySystem {
-    public func compare(standbySystem1 : StandbySystem, standbySystem2 : StandbySystem) : Order.Order {
-      standbySystem1.id.compare(standbySystem2.id);
-    };
   };
 
   type ComplaintStatus = { #open; #inProgress; #resolved };
@@ -102,12 +86,6 @@ actor {
     extraCol2 : Text;
   };
 
-  module Complaint {
-    public func compare(complaint1 : Complaint, complaint2 : Complaint) : Order.Order {
-      complaint1.id.compare(complaint2.id);
-    };
-  };
-
   type AMCPart = {
     id : Text;
     partName : Text;
@@ -122,22 +100,35 @@ actor {
     createdAt : Int;
   };
 
-  module AMCPart {
-    public func compare(part1 : AMCPart, part2 : AMCPart) : Order.Order {
-      part1.id.compare(part2.id);
-    };
-  };
-
   public type UserProfile = {
     name : Text;
   };
 
-  // State
+  type StockEntry = {
+    id : Text;
+    slNo : Nat;
+    companyAndModel : Text;
+    cpuSlNo : Text;
+    monitorSlNo : Text;
+    amcStartDate : Int;
+    amcExpiryDate : Int;
+    amcTeam : Text;
+    createdAt : Int;
+  };
+
+  // New type for result of processStockEntries
+  type ProcessStockEntriesResult = {
+    updated : Nat;
+    addedToStandby : Nat;
+  };
+
+  // Stores
   let sections = Map.empty<Text, Section>();
   let computers = Map.empty<Text, Computer>();
   let standbySystems = Map.empty<Text, StandbySystem>();
   let complaints = Map.empty<Text, Complaint>();
   let amcParts = Map.empty<Text, AMCPart>();
+  let stockEntries = Map.empty<Text, StockEntry>();
   let userProfiles = Map.empty<Principal, UserProfile>();
 
   // Section CRUD
@@ -150,7 +141,7 @@ actor {
   };
 
   public query ({ caller }) func getAllSections() : async [Section] {
-    sections.values().toArray().sort();
+    sections.values().toArray();
   };
 
   public shared ({ caller }) func updateSection(section : Section) : async () {
@@ -177,7 +168,7 @@ actor {
   };
 
   public query ({ caller }) func getAllComputers() : async [Computer] {
-    computers.values().toArray().sort();
+    computers.values().toArray();
   };
 
   public query ({ caller }) func getComputersBySection(sectionId : Text) : async [Computer] {
@@ -216,7 +207,7 @@ actor {
   };
 
   public query ({ caller }) func getAllStandbySystems() : async [StandbySystem] {
-    standbySystems.values().toArray().sort();
+    standbySystems.values().toArray();
   };
 
   public shared ({ caller }) func updateStandbySystem(standbySystem : StandbySystem) : async () {
@@ -243,14 +234,18 @@ actor {
   };
 
   public query ({ caller }) func getAllComplaints() : async [Complaint] {
-    complaints.values().toArray().sort();
+    complaints.values().toArray();
   };
 
-  public query ({ caller }) func getComplaintsByStatus(status : ComplaintStatus) : async [Complaint] {
+  public query ({ caller }) func getComplaintsByStatus(
+    status : ComplaintStatus
+  ) : async [Complaint] {
     complaints.values().toArray().filter(func(c) { c.status == status });
   };
 
-  public query ({ caller }) func getComplaintsBySection(sectionId : Text) : async [Complaint] {
+  public query ({ caller }) func getComplaintsBySection(
+    sectionId : Text
+  ) : async [Complaint] {
     complaints.values().toArray().filter(func(c) {
       switch (c.sectionId) {
         case (null) { false };
@@ -259,7 +254,9 @@ actor {
     });
   };
 
-  public query ({ caller }) func getComplaintsByComputer(computerId : Text) : async [Complaint] {
+  public query ({ caller }) func getComplaintsByComputer(
+    computerId : Text
+  ) : async [Complaint] {
     complaints.values().toArray().filter(func(c) {
       switch (c.computerId) {
         case (null) { false };
@@ -292,7 +289,7 @@ actor {
   };
 
   public query ({ caller }) func getAllAMCParts() : async [AMCPart] {
-    amcParts.values().toArray().sort();
+    amcParts.values().toArray();
   };
 
   public query ({ caller }) func getExpiringAMCParts(days : Int) : async [AMCPart] {
@@ -317,6 +314,113 @@ actor {
     switch (amcParts.get(id)) {
       case (null) {};
       case (?_) { amcParts.remove(id) };
+    };
+  };
+
+  // User Profile Management
+  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    userProfiles.get(caller);
+  };
+
+  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    userProfiles.get(user);
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    userProfiles.add(caller, profile);
+  };
+
+  // New StockEntry CRUD operations (no permission checks)
+  public shared ({ caller }) func createStockEntry(entry : StockEntry) : async () {
+    stockEntries.add(entry.id, entry);
+  };
+
+  public query ({ caller }) func getAllStockEntries() : async [StockEntry] {
+    stockEntries.values().toArray().sort(
+      func(a, b) {
+        if (a.slNo < b.slNo) { #less } else if (a.slNo > b.slNo) {
+          #greater;
+        } else { #equal };
+      }
+    );
+  };
+
+  public shared ({ caller }) func updateStockEntry(entry : StockEntry) : async () {
+    switch (stockEntries.get(entry.id)) {
+      case (null) {};
+      case (?_) { stockEntries.add(entry.id, entry) };
+    };
+  };
+
+  public shared ({ caller }) func deleteStockEntry(id : Text) : async () {
+    switch (stockEntries.get(id)) {
+      case (null) {};
+      case (?_) { stockEntries.remove(id) };
+    };
+  };
+
+  // New processStockEntries function (no permission check)
+  public shared ({ caller }) func processStockEntries() : async ProcessStockEntriesResult {
+    var updatedComputers = 0;
+    var addedToStandby = 0;
+
+    let entries = stockEntries.values().toArray();
+    for (entry in entries.values()) {
+      let cpuSlNo = entry.cpuSlNo;
+
+      // Try to find computer by serial number
+      let computerMatch = computers.values().toArray().find(
+        func(comp) {
+          comp.serialNumber.toLower().contains(#text(cpuSlNo.toLower()));
+        }
+      );
+
+      switch (computerMatch) {
+        case (null) {
+          // No computer found, check for standby system
+          let standbyExists = standbySystems.values().toArray().find(
+            func(stby) {
+              stby.serialNumber == cpuSlNo;
+            }
+          );
+
+          switch (standbyExists) {
+            case (null) {
+              let newStandby : StandbySystem = {
+                id = cpuSlNo # entry.createdAt.toText();
+                serialNumber = cpuSlNo;
+                model = entry.companyAndModel;
+                brand = "";
+                condition = #good;
+                status = #available;
+                assignedSectionId = null;
+                notes = "Auto-added from stock import";
+                createdAt = Time.now();
+              };
+              standbySystems.add(newStandby.id, newStandby);
+              addedToStandby += 1;
+            };
+            case (?_) {};
+          };
+        };
+        case (?comp) {
+          // Computer found, update its fields
+          let updatedComp : Computer = {
+            comp with
+            companyName = entry.companyAndModel;
+            amcCompany = entry.amcTeam;
+            amcStartDate = entry.amcStartDate;
+            amcEndDate = entry.amcExpiryDate;
+          };
+          computers.add(comp.id, updatedComp);
+          updatedComputers += 1;
+        };
+      };
+    };
+
+    {
+      updated = updatedComputers;
+      addedToStandby;
     };
   };
 
@@ -347,18 +451,5 @@ actor {
       computersWithExpiringAMC = expiringCount;
       totalSections = sections.size();
     };
-  };
-
-  // User Profile Management
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    userProfiles.get(caller);
-  };
-
-  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    userProfiles.get(user);
-  };
-
-  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    userProfiles.add(caller, profile);
   };
 };

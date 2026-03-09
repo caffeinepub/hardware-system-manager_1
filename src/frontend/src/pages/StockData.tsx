@@ -1,13 +1,16 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -20,43 +23,44 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
-  Building2,
   CheckCircle2,
-  Cpu,
   Database,
   Download,
   Loader2,
-  Monitor,
   RefreshCw,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Computer } from "../backend";
 import { useAdmin } from "../contexts/AdminContext";
 import { useActor } from "../hooks/useActor";
-import { useGetAllComputers, useGetAllSections } from "../hooks/useQueries";
+import {
+  useCreateStockEntry,
+  useDeleteStockEntry,
+  useGetAllStockEntries,
+} from "../hooks/useQueries";
 import { formatDate, getAMCStatus } from "../utils/formatters";
 
-// ─── Datasheet CSV ────────────────────────────────────────────────────────────
+// ─── CSV Template ─────────────────────────────────────────────────────────────
 
-const AMC_SHEET_HEADERS = [
-  "Company Name",
-  "CPU SL No",
-  "Monitor SL No",
+const STOCK_CSV_HEADERS = [
+  "Company & Model",
+  "CPU Sl No",
+  "Monitor Sl No",
   "AMC Start Date",
   "AMC Expiry Date",
-  "AMC Company",
+  "AMC Team",
 ];
 
-interface AmcRow {
-  companyName: string;
+interface StockRow {
+  companyAndModel: string;
   cpuSlNo: string;
   monitorSlNo: string;
   amcStartDate: string;
   amcExpiryDate: string;
-  amcCompany: string;
+  amcTeam: string;
 }
 
 function parseCSVLine(line: string): string[] {
@@ -68,17 +72,17 @@ function parseCSVLine(line: string): string[] {
     if (char === '"') {
       inQuotes = !inQuotes;
     } else if (char === "," && !inQuotes) {
-      result.push(current);
+      result.push(current.trim());
       current = "";
     } else {
       current += char;
     }
   }
-  result.push(current);
+  result.push(current.trim());
   return result;
 }
 
-function parseAmcCSV(text: string): AmcRow[] {
+function parseStockCSV(text: string): StockRow[] {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -89,20 +93,17 @@ function parseAmcCSV(text: string): AmcRow[] {
     .map((line) => {
       const cols = parseCSVLine(line);
       return {
-        companyName: (cols[0] ?? "").trim(),
+        companyAndModel: (cols[0] ?? "").trim(),
         cpuSlNo: (cols[1] ?? "").trim(),
         monitorSlNo: (cols[2] ?? "").trim(),
         amcStartDate: (cols[3] ?? "").trim(),
         amcExpiryDate: (cols[4] ?? "").trim(),
-        amcCompany: (cols[5] ?? "").trim(),
+        amcTeam: (cols[5] ?? "").trim(),
       };
     })
-    .filter((r) => r.cpuSlNo);
+    .filter((r) => r.cpuSlNo || r.companyAndModel);
 }
 
-/**
- * Parse date strings in DD/MM/YYYY or YYYY-MM-DD format to bigint ms.
- */
 function parseDateToBigInt(dateStr: string): bigint {
   if (!dateStr) return BigInt(0);
   // Try DD/MM/YYYY
@@ -112,22 +113,49 @@ function parseDateToBigInt(dateStr: string): bigint {
     const ms = new Date(Number(y), Number(m) - 1, Number(d)).getTime();
     return BigInt(Number.isNaN(ms) ? 0 : ms);
   }
-  // Try YYYY-MM-DD
+  // Try YYYY-MM-DD or other ISO formats
   const ms = new Date(dateStr).getTime();
   return BigInt(Number.isNaN(ms) ? 0 : ms);
 }
 
-function downloadAmcTemplate() {
-  const csvContent = `${AMC_SHEET_HEADERS.join(",")}\n`;
+function downloadStockTemplate() {
+  const rows = [
+    STOCK_CSV_HEADERS.join(","),
+    "HP EliteDesk 800 G5,SN123456789,MON987654321,01/04/2024,31/03/2025,TechAMC Solutions",
+  ];
+  const csvContent = rows.join("\n");
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "amc_datasheet_template.csv";
+  link.download = "stock_data_template.csv";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+// ─── AMC Badge ────────────────────────────────────────────────────────────────
+
+function AmcExpiryBadge({ date }: { date: bigint }) {
+  if (!date || date === BigInt(0)) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const status = getAMCStatus(date);
+  const label = formatDate(date);
+  const cls =
+    status === "expired"
+      ? "bg-red-100 text-red-700 border-red-200"
+      : status === "expiring"
+        ? "bg-amber-100 text-amber-700 border-amber-200"
+        : "bg-green-100 text-green-700 border-green-200";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cls}`}
+    >
+      {label}
+    </span>
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -137,55 +165,49 @@ export default function StockData() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
 
-  const { data: computers = [], isLoading: computersLoading } =
-    useGetAllComputers();
-  const { data: sections = [], isLoading: sectionsLoading } =
-    useGetAllSections();
+  const { data: stockEntries = [], isLoading } = useGetAllStockEntries();
+  const createMutation = useCreateStockEntry();
+  const deleteMutation = useDeleteStockEntry();
 
-  const [filterSection, setFilterSection] = useState<string>("all");
-
-  // Datasheet upload state
-  const [amcRows, setAmcRows] = useState<AmcRow[]>([]);
-  const [amcFileName, setAmcFileName] = useState<string>("");
+  // CSV upload state
+  const [csvRows, setCsvRows] = useState<StockRow[]>([]);
+  const [csvFileName, setCsvFileName] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importDone, setImportDone] = useState(false);
-  const [successCount, setSuccessCount] = useState(0);
-  const [errorCount, setErrorCount] = useState(0);
+  const [savedCount, setSavedCount] = useState(0);
+  const [updatedCount, setUpdatedCount] = useState(0);
+  const [standbyCount, setStandbyCount] = useState(0);
+  const [importErrors, setImportErrors] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isLoading = computersLoading || sectionsLoading;
+  // Delete confirmation
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const sectionName = (id: string) =>
-    sections.find((s) => s.id === id)?.name ?? id;
+  // Sorted entries by slNo
+  const sortedEntries = [...stockEntries].sort((a, b) =>
+    Number(a.slNo) < Number(b.slNo) ? -1 : 1,
+  );
 
-  const filtered =
-    filterSection === "all"
-      ? computers
-      : computers.filter((c) => c.sectionId === filterSection);
+  // ── File handling ──────────────────────────────────────────────────────────
 
-  // How many rows match existing computers by CPU SL No
-  const matchedCount = amcRows.filter((row) =>
-    computers.some(
-      (c) => c.serialNumber.toLowerCase() === row.cpuSlNo.toLowerCase(),
-    ),
-  ).length;
-
-  // File handling
   const handleFile = async (file: File) => {
-    if (!file.name.endsWith(".csv")) {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
       toast.error("Please select a .csv file");
       return;
     }
     const text = await file.text();
-    const rows = parseAmcCSV(text);
-    setAmcRows(rows);
-    setAmcFileName(file.name);
+    const rows = parseStockCSV(text);
+    setCsvRows(rows);
+    setCsvFileName(file.name);
     setImportDone(false);
     setImportProgress(0);
-    setSuccessCount(0);
-    setErrorCount(0);
+    setSavedCount(0);
+    setUpdatedCount(0);
+    setStandbyCount(0);
+    setImportErrors(0);
     if (rows.length === 0) {
       toast.error("No data rows found in CSV");
     } else {
@@ -205,69 +227,108 @@ export default function StockData() {
     if (file) handleFile(file);
   };
 
+  // ── Import ─────────────────────────────────────────────────────────────────
+
   const handleImport = async () => {
-    if (!actor || amcRows.length === 0) return;
+    if (!actor || csvRows.length === 0) return;
     setIsImporting(true);
     setImportProgress(0);
 
-    let successes = 0;
+    let saved = 0;
     let errors = 0;
 
-    for (let i = 0; i < amcRows.length; i++) {
-      const row = amcRows[i];
-      const matched = computers.find(
-        (c) => c.serialNumber.toLowerCase() === row.cpuSlNo.toLowerCase(),
-      );
-      if (!matched) {
-        // No match — skip
-        setImportProgress(Math.round(((i + 1) / amcRows.length) * 100));
-        continue;
-      }
-
+    // Save each row as a StockEntry
+    for (let i = 0; i < csvRows.length; i++) {
+      const row = csvRows[i];
       try {
-        const updated: Computer = {
-          ...matched,
-          companyName: row.companyName,
-          monitorSerial: row.monitorSlNo || matched.monitorSerial,
+        const entry = {
+          id: crypto.randomUUID(),
+          createdAt: BigInt(Date.now()),
+          slNo: BigInt(i + 1),
+          companyAndModel: row.companyAndModel,
+          cpuSlNo: row.cpuSlNo,
+          monitorSlNo: row.monitorSlNo,
           amcStartDate: parseDateToBigInt(row.amcStartDate),
-          amcEndDate: parseDateToBigInt(row.amcExpiryDate),
-          amcCompany: row.amcCompany,
-          datasheetBlob: undefined,
+          amcExpiryDate: parseDateToBigInt(row.amcExpiryDate),
+          amcTeam: row.amcTeam,
         };
-        await actor.updateComputer(updated);
-        successes++;
+        await createMutation.mutateAsync(entry);
+        saved++;
       } catch {
         errors++;
       }
-
-      setImportProgress(Math.round(((i + 1) / amcRows.length) * 100));
+      setImportProgress(Math.round(((i + 1) / csvRows.length) * 100));
     }
 
-    await queryClient.invalidateQueries({ queryKey: ["computers"] });
+    // After saving entries, call processStockEntries to update computers & standby
+    let updComputers = 0;
+    let addedStandby = 0;
+    if (saved > 0) {
+      try {
+        const result = await actor.processStockEntries();
+        updComputers = Number(result.updated);
+        addedStandby = Number(result.addedToStandby);
+      } catch {
+        // non-fatal
+      }
+    }
 
-    setSuccessCount(successes);
-    setErrorCount(errors);
+    // Invalidate all affected queries
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["stock-entries"] }),
+      queryClient.invalidateQueries({ queryKey: ["computers"] }),
+      queryClient.invalidateQueries({ queryKey: ["standby"] }),
+    ]);
+
+    setSavedCount(saved);
+    setUpdatedCount(updComputers);
+    setStandbyCount(addedStandby);
+    setImportErrors(errors);
     setIsImporting(false);
     setImportDone(true);
 
-    if (errors === 0 && successes > 0) {
-      toast.success(`${successes} records updated successfully`);
-    } else if (successes === 0) {
-      toast.error("No matching computers found. Check CPU SL No values.");
+    if (errors === 0 && saved > 0) {
+      toast.success(
+        `${saved} entries saved, ${updComputers} computers updated, ${addedStandby} added to standby`,
+      );
+    } else if (saved === 0) {
+      toast.error("Import failed. Check your CSV format.");
     } else {
-      toast.error(`Updated ${successes}, ${errors} failed`);
+      toast.error(`${saved} saved, ${errors} failed`);
     }
   };
 
   const handleReset = () => {
-    setAmcRows([]);
-    setAmcFileName("");
+    setCsvRows([]);
+    setCsvFileName("");
     setImportDone(false);
     setImportProgress(0);
-    setSuccessCount(0);
-    setErrorCount(0);
+    setSavedCount(0);
+    setUpdatedCount(0);
+    setStandbyCount(0);
+    setImportErrors(0);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+
+  const openDelete = (id: string) => {
+    setDeletingId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingId) return;
+    try {
+      await deleteMutation.mutateAsync(deletingId);
+      toast.success("Entry deleted");
+      setDeleteDialogOpen(false);
+    } catch {
+      toast.error("Failed to delete entry");
+    }
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6 animate-fade-in" data-ocid="stock.section">
@@ -278,63 +339,54 @@ export default function StockData() {
             Stock Data
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Default CPU &amp; Monitor pairs per seat, with AMC datasheet upload
+            CPU &amp; Monitor inventory with AMC details — upload a data sheet
+            to populate
           </p>
         </div>
-        <div className="flex-shrink-0 w-full sm:w-56">
-          <Select value={filterSection} onValueChange={setFilterSection}>
-            <SelectTrigger data-ocid="stock.select">
-              <SelectValue placeholder="All Sections" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Sections</SelectItem>
-              {sections.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {isLoggedIn && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 flex-shrink-0"
+            onClick={downloadStockTemplate}
+            data-ocid="stock.secondary_button"
+          >
+            <Download className="w-4 h-4" />
+            Download Template
+          </Button>
+        )}
       </div>
 
-      {/* ── AMC Datasheet Upload ─────────────────────────────────────── */}
+      {/* ── CSV Upload (logged-in only) ──────────────────────────────────── */}
       {isLoggedIn && (
         <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-          {/* Section header */}
+          {/* Upload header */}
           <div className="px-5 py-4 border-b border-border bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-display font-semibold text-base text-foreground">
-                AMC Datasheet Upload
+                Upload Stock Data Sheet
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Upload a CSV to update AMC details — matched by CPU SL No
+                CSV columns:{" "}
+                <span className="font-mono text-foreground/70">
+                  {STOCK_CSV_HEADERS.join(", ")}
+                </span>
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 flex-shrink-0"
-              onClick={downloadAmcTemplate}
-              data-ocid="stock.secondary_button"
-            >
-              <Download className="w-4 h-4" />
-              Download Template
-            </Button>
           </div>
 
           <div className="p-5 space-y-4">
-            {/* Expected columns */}
+            {/* CSV column badges */}
             <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                CSV Columns
+                Expected CSV Columns
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {AMC_SHEET_HEADERS.map((h) => (
+                {STOCK_CSV_HEADERS.map((h) => (
                   <Badge
                     key={h}
                     variant="outline"
-                    className="text-xs font-mono-data"
+                    className="text-xs font-mono"
                   >
                     {h}
                   </Badge>
@@ -357,7 +409,7 @@ export default function StockData() {
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              aria-label="Upload AMC datasheet CSV"
+              aria-label="Upload stock data CSV"
               data-ocid="stock.dropzone"
             >
               <input
@@ -374,24 +426,20 @@ export default function StockData() {
                     className={`w-5 h-5 ${isDragging ? "text-primary" : "text-primary/60"}`}
                   />
                 </div>
-                {amcFileName ? (
+                {csvFileName ? (
                   <>
                     <p className="font-display font-semibold text-foreground">
-                      {amcFileName}
+                      {csvFileName}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {amcRows.length} row{amcRows.length !== 1 ? "s" : ""}{" "}
-                      parsed &mdash;{" "}
-                      <span className="text-primary font-medium">
-                        {matchedCount} matched
-                      </span>{" "}
-                      — click to replace
+                      {csvRows.length} row{csvRows.length !== 1 ? "s" : ""}{" "}
+                      parsed — click to replace
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="font-display font-semibold text-foreground">
-                      Drop AMC datasheet here
+                      Drop stock data sheet here
                     </p>
                     <p className="text-sm text-muted-foreground">
                       or click to browse — .csv files only
@@ -410,70 +458,63 @@ export default function StockData() {
                 <div className="flex items-center gap-3">
                   <Loader2 className="w-5 h-5 text-primary animate-spin" />
                   <p className="font-semibold text-sm text-foreground">
-                    Updating… {importProgress}%
+                    Saving entries… {importProgress}%
                   </p>
                 </div>
                 <Progress value={importProgress} className="h-2" />
               </div>
             )}
 
-            {/* Import result */}
+            {/* Import result summary */}
             {importDone && !isImporting && (
               <div
-                className={`rounded-xl border p-4 space-y-1 ${
-                  errorCount === 0 && successCount > 0
-                    ? "border-green-200 bg-green-50"
-                    : "border-yellow-200 bg-yellow-50"
+                className={`rounded-xl border p-4 space-y-2 ${
+                  importErrors === 0 && savedCount > 0
+                    ? "border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900"
+                    : "border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900"
                 }`}
                 data-ocid={
-                  errorCount === 0 && successCount > 0
+                  importErrors === 0 && savedCount > 0
                     ? "stock.success_state"
                     : "stock.error_state"
                 }
               >
                 <div className="flex items-center gap-2">
-                  {errorCount === 0 && successCount > 0 ? (
+                  {importErrors === 0 && savedCount > 0 ? (
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
                   ) : (
-                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    <AlertCircle className="w-5 h-5 text-amber-600" />
                   )}
                   <p className="font-display font-semibold text-sm">
                     Import Complete
                   </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  <span className="text-green-700 font-semibold">
-                    {successCount} updated
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <span className="text-green-700 dark:text-green-400 font-semibold">
+                    {savedCount} entries saved
                   </span>
-                  {errorCount > 0 && (
-                    <>
-                      {" — "}
-                      <span className="text-red-600 font-semibold">
-                        {errorCount} errors
-                      </span>
-                    </>
+                  <span className="text-blue-700 dark:text-blue-400 font-semibold">
+                    {updatedCount} computers updated
+                  </span>
+                  <span className="text-purple-700 dark:text-purple-400 font-semibold">
+                    {standbyCount} added to standby
+                  </span>
+                  {importErrors > 0 && (
+                    <span className="text-red-600 font-semibold">
+                      {importErrors} errors
+                    </span>
                   )}
-                  {amcRows.length - matchedCount > 0 && (
-                    <>
-                      {" — "}
-                      <span className="text-muted-foreground">
-                        {amcRows.length - matchedCount} unmatched (skipped)
-                      </span>
-                    </>
-                  )}
-                </p>
+                </div>
               </div>
             )}
 
-            {/* Preview table */}
-            {amcRows.length > 0 && !isImporting && (
+            {/* Preview + action buttons */}
+            {csvRows.length > 0 && !isImporting && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-foreground">
                     Preview —{" "}
-                    <span className="text-primary">
-                      {matchedCount} of {amcRows.length} rows matched
-                    </span>
+                    <span className="text-primary">{csvRows.length} rows</span>
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -503,35 +544,29 @@ export default function StockData() {
                         size="sm"
                         className="gap-2"
                         onClick={handleImport}
-                        disabled={isImporting || matchedCount === 0}
+                        disabled={isImporting || csvRows.length === 0}
                         data-ocid="stock.primary_button"
                       >
-                        {isImporting ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Upload className="w-4 h-4" />
-                        )}
-                        Import {matchedCount} Matched
+                        <Upload className="w-4 h-4" />
+                        Import {csvRows.length} Entries
                       </Button>
                     )}
                   </div>
                 </div>
 
+                {/* Preview table */}
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/40">
-                          <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
+                          <TableHead className="text-xs uppercase tracking-wide whitespace-nowrap">
                             #
                           </TableHead>
-                          <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
-                            Match
-                          </TableHead>
-                          {AMC_SHEET_HEADERS.map((h) => (
+                          {STOCK_CSV_HEADERS.map((h) => (
                             <TableHead
                               key={h}
-                              className="font-display text-xs uppercase tracking-wide whitespace-nowrap"
+                              className="text-xs uppercase tracking-wide whitespace-nowrap"
                             >
                               {h}
                             </TableHead>
@@ -539,77 +574,47 @@ export default function StockData() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {amcRows.map((row, idx) => {
-                          const isMatched = computers.some(
-                            (c) =>
-                              c.serialNumber.toLowerCase() ===
-                              row.cpuSlNo.toLowerCase(),
-                          );
-                          return (
-                            <TableRow
-                              key={`amc-row-${idx + 1}`}
-                              data-ocid={`stock.row.${idx + 1}`}
-                              className={
-                                isMatched
-                                  ? "hover:bg-muted/20"
-                                  : "opacity-50 hover:bg-muted/10"
-                              }
-                            >
-                              <TableCell className="text-xs text-muted-foreground font-mono-data">
-                                {idx + 1}
-                              </TableCell>
-                              <TableCell>
-                                {isMatched ? (
-                                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                                ) : (
-                                  <AlertCircle className="w-4 h-4 text-muted-foreground" />
-                                )}
-                              </TableCell>
-                              <TableCell className="text-sm whitespace-nowrap">
-                                {row.companyName || (
-                                  <span className="text-muted-foreground">
-                                    —
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="font-mono-data text-xs text-muted-foreground whitespace-nowrap">
-                                {row.cpuSlNo || (
-                                  <span className="text-muted-foreground">
-                                    —
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="font-mono-data text-xs text-muted-foreground whitespace-nowrap">
-                                {row.monitorSlNo || (
-                                  <span className="text-muted-foreground">
-                                    —
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-sm whitespace-nowrap">
-                                {row.amcStartDate || (
-                                  <span className="text-muted-foreground">
-                                    —
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-sm whitespace-nowrap">
-                                {row.amcExpiryDate || (
-                                  <span className="text-muted-foreground">
-                                    —
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-sm whitespace-nowrap">
-                                {row.amcCompany || (
-                                  <span className="text-muted-foreground">
-                                    —
-                                  </span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
+                        {csvRows.map((row, idx) => (
+                          <TableRow
+                            key={`preview-${idx + 1}`}
+                            data-ocid={`stock.row.${idx + 1}`}
+                            className="hover:bg-muted/20"
+                          >
+                            <TableCell className="text-xs text-muted-foreground font-mono">
+                              {idx + 1}
+                            </TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">
+                              {row.companyAndModel || (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                              {row.cpuSlNo || (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                              {row.monitorSlNo || (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">
+                              {row.amcStartDate || (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">
+                              {row.amcExpiryDate || (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">
+                              {row.amcTeam || (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   </div>
@@ -620,172 +625,166 @@ export default function StockData() {
         </div>
       )}
 
-      {/* ── Stock Cards ──────────────────────────────────────────────── */}
-      {isLoading ? (
-        <div
-          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
-          data-ocid="stock.loading_state"
-        >
-          {["sk1", "sk2", "sk3", "sk4", "sk5", "sk6"].map((sk) => (
-            <Skeleton key={sk} className="h-64 rounded-xl" />
-          ))}
+      {/* ── Stock List ───────────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-border bg-muted/30 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display font-semibold text-base text-foreground">
+              Stock Register
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {sortedEntries.length} entr
+              {sortedEntries.length !== 1 ? "ies" : "y"} recorded
+            </p>
+          </div>
         </div>
-      ) : filtered.length === 0 ? (
-        <div
-          className="flex flex-col items-center justify-center py-20 rounded-xl border-2 border-dashed border-border text-muted-foreground gap-4"
-          data-ocid="stock.empty_state"
-        >
-          <Database className="w-12 h-12 opacity-30" />
-          <p className="font-display font-semibold text-lg text-foreground">
-            No stock data
-          </p>
-          <p className="text-sm text-center max-w-xs">
-            {filterSection !== "all"
-              ? "No computers registered in this section"
-              : "Import devices or add computers to see stock data here"}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((computer, idx) => {
-            const amcStatus = getAMCStatus(computer.amcEndDate);
-            const amcDateStr = formatDate(computer.amcEndDate);
-            const hasAmcDate =
-              computer.amcEndDate && computer.amcEndDate > BigInt(0);
 
-            return (
-              <div
-                key={computer.id}
-                className="rounded-xl border border-border bg-card shadow-card overflow-hidden transition-all hover:shadow-card-hover hover:border-primary/30"
-                data-ocid={`stock.item.${idx + 1}`}
-              >
-                {/* Card top — section + status */}
-                <div className="px-4 py-3 bg-gradient-to-r from-primary/8 to-transparent border-b border-border flex items-center justify-between gap-2">
-                  <Badge
-                    variant="outline"
-                    className="text-xs font-medium truncate max-w-[160px]"
+        {isLoading ? (
+          <div className="p-5 space-y-3" data-ocid="stock.loading_state">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Skeleton key={n} className="h-10 rounded-lg w-full" />
+            ))}
+          </div>
+        ) : sortedEntries.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-4"
+            data-ocid="stock.empty_state"
+          >
+            <Database className="w-12 h-12 opacity-30" />
+            <p className="font-display font-semibold text-lg text-foreground">
+              No stock entries yet
+            </p>
+            <p className="text-sm text-center max-w-xs">
+              {isLoggedIn
+                ? "Upload a stock data sheet above to populate this register"
+                : "Log in to upload stock data"}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap w-14">
+                    Sl No
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
+                    Company &amp; Model
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
+                    CPU Sl No
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
+                    Monitor Sl No
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
+                    AMC Start Date
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
+                    AMC Expiry Date
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
+                    AMC Team
+                  </TableHead>
+                  {isLoggedIn && (
+                    <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap w-12">
+                      {/* Actions */}
+                    </TableHead>
+                  )}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedEntries.map((entry, idx) => (
+                  <TableRow
+                    key={entry.id}
+                    data-ocid={`stock.item.${idx + 1}`}
+                    className="hover:bg-muted/20 transition-colors"
                   >
-                    {sectionName(computer.sectionId)}
-                  </Badge>
-                  <span
-                    className={`text-xs font-medium px-2 py-0.5 rounded-full border status-badge-${computer.status}`}
-                  >
-                    {computer.status}
-                  </span>
-                </div>
-
-                {/* Seat + user */}
-                <div className="px-4 pt-4 pb-2 text-center border-b border-border/50">
-                  <p className="text-2xl font-display font-bold text-foreground">
-                    Seat {computer.seatNumber || "—"}
-                  </p>
-                  <sub className="text-xs text-muted-foreground mt-0.5 block not-italic">
-                    {computer.currentUser || "Unassigned"}
-                  </sub>
-                </div>
-
-                {/* Company name */}
-                {computer.companyName && (
-                  <div className="px-4 pt-3 pb-1 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-medium text-foreground truncate">
-                      {computer.companyName}
-                    </p>
-                  </div>
-                )}
-
-                {/* CPU + Monitor */}
-                <div className="px-4 py-3 grid grid-cols-2 gap-3">
-                  {/* CPU */}
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      <Cpu className="w-3.5 h-3.5" />
-                      CPU
-                    </div>
-                    <p className="font-mono-data text-xs text-foreground truncate">
-                      {computer.serialNumber || "—"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {computer.model || "—"}
-                    </p>
-                  </div>
-
-                  {/* Monitor */}
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      <Monitor className="w-3.5 h-3.5" />
-                      Monitor
-                    </div>
-                    <p className="font-mono-data text-xs text-foreground truncate">
-                      {computer.monitorSerial || "—"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {computer.monitorModel || "—"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* AMC Info */}
-                {(hasAmcDate || computer.amcCompany) && (
-                  <div className="px-4 pb-3 space-y-1.5 border-t border-border/50 pt-2.5">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      AMC
-                    </p>
-                    {computer.amcCompany && (
-                      <p className="text-xs text-foreground truncate">
-                        {computer.amcCompany}
-                      </p>
+                    <TableCell className="text-sm font-mono text-muted-foreground">
+                      {Number(entry.slNo)}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium text-foreground whitespace-nowrap max-w-[200px] truncate">
+                      {entry.companyAndModel || (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                      {entry.cpuSlNo || (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                      {entry.monitorSlNo || (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm whitespace-nowrap">
+                      {entry.amcStartDate && entry.amcStartDate > BigInt(0) ? (
+                        <span className="text-foreground">
+                          {formatDate(entry.amcStartDate)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm whitespace-nowrap">
+                      <AmcExpiryBadge date={entry.amcExpiryDate} />
+                    </TableCell>
+                    <TableCell className="text-sm whitespace-nowrap">
+                      {entry.amcTeam || (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    {isLoggedIn && (
+                      <TableCell>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => openDelete(entry.id)}
+                          data-ocid={`stock.delete_button.${idx + 1}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
                     )}
-                    {hasAmcDate && (
-                      <p
-                        className={`text-xs font-medium ${
-                          amcStatus === "expired"
-                            ? "text-red-600"
-                            : amcStatus === "expiring"
-                              ? "text-yellow-600"
-                              : "text-green-600"
-                        }`}
-                      >
-                        {amcStatus === "expired"
-                          ? "Expired: "
-                          : amcStatus === "expiring"
-                            ? "Expiring: "
-                            : "Valid until: "}
-                        {amcDateStr}
-                      </p>
-                    )}
-                  </div>
-                )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
 
-                {/* IPs */}
-                {(computer.ip1 || computer.ip2) && (
-                  <div className="px-4 pb-3 flex flex-wrap gap-2">
-                    {computer.ip1 && (
-                      <span className="font-mono-data text-xs bg-muted/60 text-foreground px-2 py-0.5 rounded-md border border-border">
-                        {computer.ip1}
-                      </span>
-                    )}
-                    {computer.ip2 && (
-                      <span className="font-mono-data text-xs bg-muted/60 text-foreground px-2 py-0.5 rounded-md border border-border">
-                        {computer.ip2}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Remarks */}
-                {computer.remarks && (
-                  <div className="px-4 pb-3">
-                    <p className="text-xs text-muted-foreground line-clamp-2 italic">
-                      {computer.remarks}
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent data-ocid="stock.dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">
+              Delete Stock Entry?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this entry from the stock register.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="stock.cancel_button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-ocid="stock.confirm_button"
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

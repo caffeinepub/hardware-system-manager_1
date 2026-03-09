@@ -5,6 +5,7 @@ import type {
   Computer,
   Section,
   StandbySystem,
+  StockEntry,
 } from "../backend";
 import type { ComplaintStatus } from "../backend";
 import { useActor } from "./useActor";
@@ -304,6 +305,44 @@ export function useDeleteAMCPart() {
       return actor.deleteAMCPart(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["amc-parts"] }),
+  });
+}
+
+// ─── Stock Entries ────────────────────────────────────────────────────────────
+
+export function useGetAllStockEntries() {
+  const { actor, isFetching } = useActor();
+  return useQuery<StockEntry[]>({
+    queryKey: ["stock-entries"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getAllStockEntries();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useCreateStockEntry() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (entry: StockEntry) => {
+      if (!actor) throw new Error("No actor");
+      return actor.createStockEntry(entry);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["stock-entries"] }),
+  });
+}
+
+export function useDeleteStockEntry() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => {
+      if (!actor) throw new Error("No actor");
+      return actor.deleteStockEntry(id);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["stock-entries"] }),
   });
 }
 

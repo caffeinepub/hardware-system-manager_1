@@ -66,10 +66,18 @@ const statusLabels: Record<string, string> = {
   retired: "Retired",
 };
 
+type UnitType = "CPU" | "Monitor" | "Other";
+
+const unitTypeBadge: Record<UnitType, string> = {
+  CPU: "bg-blue-100 text-blue-700 border-blue-200",
+  Monitor: "bg-purple-100 text-purple-700 border-purple-200",
+  Other: "bg-muted text-muted-foreground border-border",
+};
+
 const emptyForm = () => ({
   serialNumber: "",
   model: "",
-  brand: "",
+  brand: "CPU" as UnitType,
   condition: "good" as "good" | "fair" | "poor",
   status: "available" as "available" | "inUse" | "retired",
   assignedSectionId: "",
@@ -101,12 +109,18 @@ export default function StandbySystems() {
     setDialogOpen(true);
   };
 
+  const resolveUnitType = (brand: string): UnitType => {
+    if (brand === "Monitor") return "Monitor";
+    if (brand === "Other") return "Other";
+    return "CPU"; // default for "CPU", empty, or legacy values
+  };
+
   const openEdit = (system: StandbySystem) => {
     setEditingSystem(system);
     setForm({
       serialNumber: system.serialNumber,
       model: system.model,
-      brand: system.brand,
+      brand: resolveUnitType(system.brand),
       condition: system.condition as "good" | "fair" | "poor",
       status: system.status as "available" | "inUse" | "retired",
       assignedSectionId: system.assignedSectionId ?? "",
@@ -121,8 +135,8 @@ export default function StandbySystems() {
   };
 
   const handleSubmit = async () => {
-    if (!form.serialNumber.trim() || !form.model.trim()) {
-      toast.error("Serial number and model are required");
+    if (!form.serialNumber.trim() || !form.model.trim() || !form.brand) {
+      toast.error("Serial number, model, and unit type are required");
       return;
     }
     const data: StandbySystem = {
@@ -216,7 +230,10 @@ export default function StandbySystems() {
                     Serial No.
                   </TableHead>
                   <TableHead className="font-display text-xs uppercase tracking-wide">
-                    Model / Brand
+                    Unit Type
+                  </TableHead>
+                  <TableHead className="font-display text-xs uppercase tracking-wide">
+                    Model
                   </TableHead>
                   <TableHead className="font-display text-xs uppercase tracking-wide">
                     Condition
@@ -248,12 +265,28 @@ export default function StandbySystems() {
                       {system.serialNumber}
                     </TableCell>
                     <TableCell>
-                      <div>
-                        <p className="font-semibold text-sm">{system.model}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {system.brand}
-                        </p>
-                      </div>
+                      {(() => {
+                        const ut = (
+                          system.brand === "Monitor"
+                            ? "Monitor"
+                            : system.brand === "Other"
+                              ? "Other"
+                              : "CPU"
+                        ) as UnitType;
+                        return (
+                          <span
+                            className={cn(
+                              "text-xs font-semibold px-2 py-0.5 rounded-full border",
+                              unitTypeBadge[ut],
+                            )}
+                          >
+                            {ut}
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-semibold text-sm">{system.model}</p>
                     </TableCell>
                     <TableCell>
                       <span
@@ -350,16 +383,22 @@ export default function StandbySystems() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ss-brand">Brand</Label>
-              <Input
-                id="ss-brand"
-                placeholder="e.g. HP"
+              <Label>Unit Type *</Label>
+              <Select
                 value={form.brand}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, brand: e.target.value }))
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, brand: v as UnitType }))
                 }
-                data-ocid="standby.input"
-              />
+              >
+                <SelectTrigger data-ocid="standby.select">
+                  <SelectValue placeholder="Select unit type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CPU">CPU</SelectItem>
+                  <SelectItem value="Monitor">Monitor</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Condition</Label>
