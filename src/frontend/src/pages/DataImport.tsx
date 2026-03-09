@@ -10,12 +10,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   CheckCircle2,
   Download,
   FileSpreadsheet,
   Loader2,
+  LogIn,
   RefreshCw,
   Upload,
   X,
@@ -124,11 +126,12 @@ function downloadTemplate() {
 
 export default function DataImport() {
   const { isLoggedIn } = useAdmin();
-  const { actor } = useActor();
+  const { actor, isFetching: isActorFetching } = useActor();
   const { data: sections = [] } = useGetAllSections();
   const createSectionMutation = useCreateSection();
   const createComputerMutation = useCreateComputer();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState<string>("");
@@ -173,7 +176,18 @@ export default function DataImport() {
   };
 
   const handleImport = async () => {
-    if (!actor || parsedRows.length === 0) return;
+    if (!isLoggedIn) {
+      toast.error("Please log in first to import data");
+      return;
+    }
+
+    if (isActorFetching || !actor) {
+      toast.error("Backend not ready — please wait a moment and try again");
+      return;
+    }
+
+    if (parsedRows.length === 0) return;
+
     setIsImporting(true);
     setProgress(0);
 
@@ -184,6 +198,7 @@ export default function DataImport() {
 
     let successes = 0;
     let errors = 0;
+    let firstError: unknown = null;
 
     for (let i = 0; i < parsedRows.length; i++) {
       const row = parsedRows[i];
@@ -207,6 +222,8 @@ export default function DataImport() {
 
         if (!sectionId) {
           errors++;
+          if (!firstError)
+            firstError = new Error(`Row ${i + 1}: missing section name`);
           setProgress(Math.round(((i + 1) / parsedRows.length) * 100));
           continue;
         }
@@ -236,8 +253,12 @@ export default function DataImport() {
 
         await createComputerMutation.mutateAsync(computer);
         successes++;
-      } catch {
+      } catch (err) {
         errors++;
+        if (!firstError) firstError = err;
+        if (errors <= 3) {
+          console.error(`Import row ${i + 1} error:`, err);
+        }
       }
 
       setProgress(Math.round(((i + 1) / parsedRows.length) * 100));
@@ -253,6 +274,10 @@ export default function DataImport() {
 
     if (errors === 0) {
       toast.success(`${successes} devices imported successfully`);
+    } else if (successes === 0) {
+      toast.error(
+        `Import failed — all ${errors} rows encountered errors. Make sure you are logged in and the data is correct.`,
+      );
     } else {
       toast.error(`Import done: ${successes} succeeded, ${errors} failed`);
     }
@@ -271,16 +296,39 @@ export default function DataImport() {
   if (!isLoggedIn) {
     return (
       <div
-        className="flex flex-col items-center justify-center py-24 rounded-xl border-2 border-dashed border-border text-muted-foreground gap-4"
+        className="flex flex-col items-center justify-center py-24 rounded-xl border-2 border-dashed border-border text-muted-foreground gap-5"
         data-ocid="import.section"
       >
-        <FileSpreadsheet className="w-12 h-12 opacity-30" />
-        <p className="font-display font-semibold text-lg text-foreground">
-          Login Required
-        </p>
-        <p className="text-sm text-center max-w-xs">
-          Please log in as Admin or User to import device data.
-        </p>
+        <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center">
+          <FileSpreadsheet className="w-8 h-8 text-muted-foreground/50" />
+        </div>
+        <div className="text-center space-y-1">
+          <p className="font-display font-bold text-xl text-foreground">
+            Login Required
+          </p>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            You need to be logged in as Admin or User to import device data.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            onClick={() => navigate({ to: "/login" })}
+            className="gap-2"
+            data-ocid="import.primary_button"
+          >
+            <LogIn className="w-4 h-4" />
+            Go to User Login
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate({ to: "/admin" })}
+            className="gap-2"
+            data-ocid="import.secondary_button"
+          >
+            <LogIn className="w-4 h-4" />
+            Go to Admin Login
+          </Button>
+        </div>
       </div>
     );
   }
@@ -427,11 +475,17 @@ export default function DataImport() {
                 {" "}
                 &mdash;{" "}
                 <span className="text-red-600 font-semibold">
-                  {errorCount} errors
+                  {errorCount} rows failed
                 </span>
               </>
             )}
           </p>
+          {errorCount > 0 && (
+            <p className="text-xs text-yellow-700 mt-1">
+              Some rows failed to import. Make sure you are logged in and the
+              CSV data is correct, then try again.
+            </p>
+          )}
         </div>
       )}
 
@@ -471,15 +525,19 @@ export default function DataImport() {
                   size="sm"
                   className="gap-2"
                   onClick={handleImport}
-                  disabled={isImporting || parsedRows.length === 0}
+                  disabled={
+                    isImporting || parsedRows.length === 0 || isActorFetching
+                  }
                   data-ocid="import.primary_button"
                 >
-                  {isImporting ? (
+                  {isImporting || isActorFetching ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <Upload className="w-4 h-4" />
                   )}
-                  Import {parsedRows.length} Rows
+                  {isActorFetching
+                    ? "Connecting…"
+                    : `Import ${parsedRows.length} Rows`}
                 </Button>
               )}
             </div>
