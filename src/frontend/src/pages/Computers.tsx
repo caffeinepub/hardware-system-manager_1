@@ -219,6 +219,19 @@ export default function Computers() {
     "utilities",
   ];
 
+  // Normalize section names: treat roman numeral variants as their numeric equivalents
+  const normalizeSectionName = (name: string) => {
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/\bd\s+i\b/g, "d1")
+      .replace(/\bd\s+ii\b/g, "d2")
+      .replace(/\bd\s+iii\b/g, "d3")
+      .replace(/\bd\s+iv\b/g, "d4")
+      .replace(/\bd\s+v\b/g, "d5")
+      .replace(/\s+/g, ""); // collapse remaining spaces
+  };
+
   // Sort seats: SO first, then numeric ascending, then Computer Assistants, then others
   const sortSeats = (comps: typeof computers) => {
     return [...comps].sort((a, b) => {
@@ -250,8 +263,8 @@ export default function Computers() {
 
   // Build ordered list of section keys by SECTION_ORDER, remaining sections after, then unassigned
   const sectionsSortedByOrder = sections.slice().sort((a, b) => {
-    const ai = SECTION_ORDER.indexOf(a.name.trim().toLowerCase());
-    const bi = SECTION_ORDER.indexOf(b.name.trim().toLowerCase());
+    const ai = SECTION_ORDER.indexOf(normalizeSectionName(a.name));
+    const bi = SECTION_ORDER.indexOf(normalizeSectionName(b.name));
     const ar = ai === -1 ? 9999 : ai;
     const br = bi === -1 ? 9999 : bi;
     return ar - br;
