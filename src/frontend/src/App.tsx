@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-router";
 import { Layout } from "./components/Layout";
 import { AdminProvider } from "./contexts/AdminContext";
-import { InternetIdentityProvider } from "./hooks/useInternetIdentity";
 
 import AdminLogin from "./pages/AdminLogin";
 import Complaints from "./pages/Complaints";
@@ -16,7 +15,6 @@ import Computers from "./pages/Computers";
 // Pages
 import Dashboard from "./pages/Dashboard";
 import DataImport from "./pages/DataImport";
-import Sections from "./pages/Sections";
 import StandbySystems from "./pages/StandbySystems";
 import StockData from "./pages/StockData";
 import UserLogin from "./pages/UserLogin";
@@ -24,14 +22,12 @@ import UserLogin from "./pages/UserLogin";
 // Root route with layout
 const rootRoute = createRootRoute({
   component: () => (
-    <InternetIdentityProvider>
-      <AdminProvider>
-        <Layout>
-          <Outlet />
-        </Layout>
-        <Toaster position="top-right" richColors />
-      </AdminProvider>
-    </InternetIdentityProvider>
+    <AdminProvider>
+      <Layout>
+        <Outlet />
+      </Layout>
+      <Toaster position="top-right" richColors />
+    </AdminProvider>
   ),
 });
 
@@ -39,12 +35,6 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   component: Dashboard,
-});
-
-const sectionsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/sections",
-  component: Sections,
 });
 
 const computersRoute = createRoute({
@@ -91,7 +81,6 @@ const stockRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  sectionsRoute,
   computersRoute,
   standbyRoute,
   complaintsRoute,

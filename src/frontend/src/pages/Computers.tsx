@@ -207,6 +207,36 @@ export default function Computers() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  // Fixed section name ordering
+  const SECTION_ORDER = [
+    "officers",
+    "d1",
+    "d2",
+    "d5",
+    "d3",
+    "d4",
+    "dss",
+    "utilities",
+  ];
+
+  // Sort seats: SO first, then numeric ascending, then Computer Assistants, then others
+  const sortSeats = (comps: typeof computers) => {
+    return [...comps].sort((a, b) => {
+      const getSeatRank = (seat: string) => {
+        const s = (seat || "").trim().toLowerCase();
+        if (s === "so") return 0;
+        const num = Number.parseInt(s, 10);
+        if (!Number.isNaN(num)) return 1000 + num;
+        if (s.includes("computer assistant") || s.includes("ca")) return 9000;
+        return 10000;
+      };
+      const rankA = getSeatRank(a.seatNumber);
+      const rankB = getSeatRank(b.seatNumber);
+      if (rankA !== rankB) return rankA - rankB;
+      return (a.seatNumber || "").localeCompare(b.seatNumber || "");
+    });
+  };
+
   // Group computers by section
   const groupedComputers = computers.reduce<Record<string, typeof computers>>(
     (acc, computer) => {
@@ -218,9 +248,19 @@ export default function Computers() {
     {},
   );
 
-  // Build ordered list of section keys: known sections first, then unassigned
+  // Build ordered list of section keys by SECTION_ORDER, remaining sections after, then unassigned
+  const sectionsSortedByOrder = sections.slice().sort((a, b) => {
+    const ai = SECTION_ORDER.indexOf(a.name.trim().toLowerCase());
+    const bi = SECTION_ORDER.indexOf(b.name.trim().toLowerCase());
+    const ar = ai === -1 ? 9999 : ai;
+    const br = bi === -1 ? 9999 : bi;
+    return ar - br;
+  });
+
   const orderedSectionKeys = [
-    ...sections.map((s) => s.id).filter((id) => groupedComputers[id]),
+    ...sectionsSortedByOrder
+      .map((s) => s.id)
+      .filter((id) => groupedComputers[id]),
     ...(groupedComputers.__unassigned__ ? ["__unassigned__"] : []),
   ];
 
@@ -228,6 +268,11 @@ export default function Computers() {
     key === "__unassigned__"
       ? "Unassigned"
       : (sections.find((s) => s.id === key)?.name ?? key);
+
+  const getSectionDescription = (key: string) =>
+    key === "__unassigned__"
+      ? ""
+      : (sections.find((s) => s.id === key)?.description ?? "");
 
   return (
     <div className="space-y-6 animate-fade-in" data-ocid="computers.section">
@@ -283,8 +328,10 @@ export default function Computers() {
       ) : (
         <div className="space-y-5">
           {orderedSectionKeys.map((sectionKey, sectionIdx) => {
-            const sectionComputers = groupedComputers[sectionKey];
+            const rawSectionComputers = groupedComputers[sectionKey];
+            const sectionComputers = sortSeats(rawSectionComputers);
             const label = getSectionLabel(sectionKey);
+            const description = getSectionDescription(sectionKey);
             return (
               <div
                 key={sectionKey}
@@ -294,10 +341,17 @@ export default function Computers() {
                 {/* Section heading */}
                 <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
                   <Monitor className="w-4 h-4 text-primary opacity-70" />
-                  <h3 className="font-display font-bold text-base text-foreground tracking-tight">
-                    {label}
-                  </h3>
-                  <span className="ml-auto text-xs text-muted-foreground font-medium">
+                  <div className="flex flex-col min-w-0">
+                    <h3 className="font-display font-bold text-base text-foreground tracking-tight">
+                      {label}
+                    </h3>
+                    {description && (
+                      <p className="text-xs text-muted-foreground leading-tight mt-0.5">
+                        {description}
+                      </p>
+                    )}
+                  </div>
+                  <span className="ml-auto text-xs text-muted-foreground font-medium flex-shrink-0">
                     {sectionComputers.length}{" "}
                     {sectionComputers.length === 1 ? "device" : "devices"}
                   </span>

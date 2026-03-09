@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   AlertTriangle,
-  Building2,
   CheckCircle2,
   ChevronRight,
   Database,
@@ -24,7 +23,6 @@ import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/sections", label: "Sections", icon: Building2 },
   { path: "/computers", label: "Computers", icon: Monitor },
   { path: "/standby", label: "Standby Systems", icon: Server },
   { path: "/complaints", label: "Complaints", icon: AlertTriangle },

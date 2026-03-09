@@ -4,6 +4,7 @@ import { type ReactNode, createContext, useContext, useState } from "react";
 const SESSION_KEY = "hw_admin";
 const ROLE_KEY = "hw_role";
 const EMAIL_KEY = "hw_user_email";
+const TOKEN_KEY = "hw_actor_token";
 // This key is read by useActor.ts via getSecretParameter("caffeineAdminToken")
 const ACTOR_TOKEN_KEY = "caffeineAdminToken";
 
@@ -36,6 +37,11 @@ export const ICP_IDENTITY_MARKER = "icp-identity-authorized";
 
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole>(() => {
+    // Restore sessionStorage token from localStorage on page load so useActor always has it
+    const savedToken = localStorage.getItem(TOKEN_KEY);
+    if (savedToken) {
+      sessionStorage.setItem(ACTOR_TOKEN_KEY, savedToken);
+    }
     return (localStorage.getItem(ROLE_KEY) as UserRole) ?? null;
   });
 
@@ -44,8 +50,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   });
 
   const login = (newRole: "admin" | "user", token: string, email?: string) => {
-    // Store token in sessionStorage so useActor picks it up via getSecretParameter
+    // Store token in both sessionStorage (for useActor) and localStorage (for persistence across reloads)
     sessionStorage.setItem(ACTOR_TOKEN_KEY, token);
+    localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(SESSION_KEY, "true");
     localStorage.setItem(ROLE_KEY, newRole);
     if (email) {
@@ -57,6 +64,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     sessionStorage.removeItem(ACTOR_TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(ROLE_KEY);
     localStorage.removeItem(EMAIL_KEY);

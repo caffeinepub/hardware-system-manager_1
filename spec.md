@@ -1,32 +1,36 @@
 # Hardware System Manager
 
 ## Current State
-- User Login page uses email + passkey ("Mainuser123") as a frontend-only password check. The backend still sees an anonymous caller.
-- Admin Login page uses passkey "Kpsckkdadmin" -- same frontend-only approach.
-- `useInternetIdentity` hook and `InternetIdentityProvider` are present in the codebase but not wired into any login UI.
-- `useActor` creates an authenticated actor when an ICP identity is present.
-- `AdminContext` tracks `role`, `userEmail`, `isAuthorized`, `isAdmin`.
+- Sections page exists as a standalone page with add/edit/delete functionality and seat cards.
+- Computers page groups devices by section in card-style tables. Section heading shows section name and device count only.
+- Sidebar nav includes "Sections" as a separate link.
+- Sections are ordered by whatever order they come from the backend (no fixed ordering).
+- Seats within each section are ordered by insertion order.
 
 ## Requested Changes (Diff)
 
 ### Add
-- "Login with Internet Identity" button on the User Login page (below existing email+passkey form, separated by "or").
-- When ICP Internet Identity login succeeds, treat the user as an "Authorized User" (non-anonymous, full edit access) -- same as the email+passkey path.
-- `InternetIdentityProvider` wrapper in App.tsx so the `useInternetIdentity` hook is available app-wide.
-- On successful II login, call `login("user", ...)` in AdminContext so the sidebar shows "Authorized User" badge.
-- On logout, also call `clear()` from `useInternetIdentity` to clear the ICP session.
+- Section description displayed alongside section name in the Computers page section heading (below the section name, as a subtitle), without changing the overall card/table layout.
+- Fixed section ordering in the Computers page: Officers, D1, D2, D5, D3, D4, DSS, Utilities. Unrecognized sections appear after.
+- Fixed seat/row ordering within each section in the Computers page: "SO" seats first, then numeric seats (1, 2, 3...), then "Computer Assistant" seats, then all other seats.
 
 ### Modify
-- `App.tsx`: Wrap root with `InternetIdentityProvider`.
-- `UserLogin.tsx`: Add ICP Internet Identity login button using `useInternetIdentity`. On success callback, call `login("user", "ii-identity", email_or_principal)` and navigate to dashboard.
-- `AdminContext.tsx` / `Layout.tsx`: On logout, also clear the ICP identity (call `clear()`).
-- Keep existing email+passkey login intact -- ICP II is an additional option.
+- Remove "Sections" nav item from sidebar.
+- Remove Sections route from App.tsx router.
+- Computers page: update section heading to show description as a small subtitle line below the section name (only when description is non-empty), keeping existing icon, name, and device count layout intact.
+- Computers page: `orderedSectionKeys` logic updated to use the fixed section name ordering above.
+- Computers page: `sectionComputers` list sorted per the seat ordering rules above.
 
 ### Remove
-- Nothing removed.
+- Sections page nav link from Layout.tsx.
+- Sections route from App.tsx.
 
 ## Implementation Plan
-1. Wrap `App.tsx` root with `InternetIdentityProvider` (import from `./hooks/useInternetIdentity`).
-2. In `UserLogin.tsx`, import and use `useInternetIdentity`. Add an "or" divider and "Login with Internet Identity" button. On II login success (watch `isLoginSuccess`), call `login("user", "ii-identity", principalString)` and navigate to "/".
-3. In `Layout.tsx`, import `useInternetIdentity`, call `clear()` alongside `logout()` when the logout button is clicked.
-4. Validate and build.
+1. Layout.tsx: Remove the Sections nav item from `navItems` array.
+2. App.tsx: Remove sectionsRoute import, route definition, and route from routeTree.
+3. Computers.tsx:
+   a. Add a `SECTION_ORDER` constant for the fixed section name ordering.
+   b. Update `orderedSectionKeys` to sort by `SECTION_ORDER` (case-insensitive match), with unrecognized sections at the end.
+   c. Add a `sortSeats` helper: SO seats first, then numeric seats ascending, then Computer Assistant seats, then others.
+   d. Apply `sortSeats` when rendering `sectionComputers` per section.
+   e. In the section heading block, add a description subtitle line below the section name (only when description is non-empty).

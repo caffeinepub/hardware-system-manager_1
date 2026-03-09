@@ -88,7 +88,7 @@ function fmtNs(ns: bigint | undefined): string {
 
 /** Calculate pending days between two bigint nanosecond timestamps (or from first to today) */
 function calcPendingDays(createdAt: bigint, caseClearedDate?: bigint): number {
-  const startMs = Number(createdAt);
+  const startMs = Number(createdAt) / 1_000_000;
   const endMs = caseClearedDate
     ? Number(caseClearedDate) / 1_000_000
     : Date.now();
@@ -131,6 +131,7 @@ function PendingBadge({
 const emptyForm = () => ({
   unitSlNo: "",
   unit: "",
+  caseLoggedDate: "",
   caseAttendedDate: "",
   sparesTaken: "",
   spareTakenDate: "",
@@ -214,6 +215,7 @@ export default function Complaints() {
     setForm({
       unitSlNo: complaint.unitSlNo,
       unit: complaint.unit,
+      caseLoggedDate: nsToDatStr(complaint.createdAt),
       caseAttendedDate: nsToDatStr(complaint.caseAttendedDate),
       sparesTaken: complaint.sparesTaken,
       spareTakenDate: nsToDatStr(complaint.spareTakenDate),
@@ -239,8 +241,13 @@ export default function Complaints() {
       toast.error("User / Reported By is required");
       return;
     }
+    if (!form.caseLoggedDate) {
+      toast.error("Case Logged Date is required");
+      return;
+    }
 
     const clearedNs = dateStrToNs(form.caseClearedDate);
+    const loggedNs = dateStrToNs(form.caseLoggedDate) ?? BigInt(Date.now());
 
     const data: Complaint = {
       id: editingComplaint?.id ?? crypto.randomUUID(),
@@ -259,7 +266,7 @@ export default function Complaints() {
       sectionId: form.sectionId || undefined,
       computerId: editingComplaint?.computerId ?? undefined,
       description: form.description,
-      createdAt: editingComplaint?.createdAt ?? BigInt(Date.now()),
+      createdAt: loggedNs,
       resolvedAt:
         form.status === "resolved" && !editingComplaint?.resolvedAt
           ? BigInt(Date.now())
@@ -592,6 +599,22 @@ export default function Complaints() {
                 value={form.unit}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, unit: e.target.value }))
+                }
+                data-ocid="complaints.input"
+              />
+            </div>
+
+            {/* Case Logged Date */}
+            <div className="space-y-1.5">
+              <Label htmlFor="cp-logged">
+                Case Logged Date <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="cp-logged"
+                type="date"
+                value={form.caseLoggedDate}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, caseLoggedDate: e.target.value }))
                 }
                 data-ocid="complaints.input"
               />
