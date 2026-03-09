@@ -1,19 +1,15 @@
 import Map "mo:core/Map";
-import Array "mo:core/Array";
-import Int "mo:core/Int";
-import Order "mo:core/Order";
 import Time "mo:core/Time";
 import Text "mo:core/Text";
 import Principal "mo:core/Principal";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
 import AccessControl "authorization/access-control";
-import MixinAuthorization "authorization/MixinAuthorization";
 
 actor {
-  // user system
+  // Keep accessControlState as a stable variable for upgrade compatibility.
+  // It is no longer used for authorization — all functions are open.
   let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
 
   include MixinStorage();
 
@@ -116,7 +112,6 @@ actor {
     createdAt : Int;
   };
 
-  // New type for result of processStockEntries
   type ProcessStockEntriesResult = {
     updated : Nat;
     addedToStandby : Nat;
@@ -132,26 +127,26 @@ actor {
   let userProfiles = Map.empty<Principal, UserProfile>();
 
   // Section CRUD
-  public shared ({ caller }) func createSection(section : Section) : async () {
+  public shared func createSection(section : Section) : async () {
     sections.add(section.id, section);
   };
 
-  public query ({ caller }) func getSection(id : Text) : async ?Section {
+  public query func getSection(id : Text) : async ?Section {
     sections.get(id);
   };
 
-  public query ({ caller }) func getAllSections() : async [Section] {
+  public query func getAllSections() : async [Section] {
     sections.values().toArray();
   };
 
-  public shared ({ caller }) func updateSection(section : Section) : async () {
+  public shared func updateSection(section : Section) : async () {
     switch (sections.get(section.id)) {
       case (null) {};
       case (?_) { sections.add(section.id, section) };
     };
   };
 
-  public shared ({ caller }) func deleteSection(id : Text) : async () {
+  public shared func deleteSection(id : Text) : async () {
     switch (sections.get(id)) {
       case (null) {};
       case (?_) { sections.remove(id) };
@@ -159,23 +154,23 @@ actor {
   };
 
   // Computer CRUD
-  public shared ({ caller }) func createComputer(computer : Computer) : async () {
+  public shared func createComputer(computer : Computer) : async () {
     computers.add(computer.id, computer);
   };
 
-  public query ({ caller }) func getComputer(id : Text) : async ?Computer {
+  public query func getComputer(id : Text) : async ?Computer {
     computers.get(id);
   };
 
-  public query ({ caller }) func getAllComputers() : async [Computer] {
+  public query func getAllComputers() : async [Computer] {
     computers.values().toArray();
   };
 
-  public query ({ caller }) func getComputersBySection(sectionId : Text) : async [Computer] {
+  public query func getComputersBySection(sectionId : Text) : async [Computer] {
     computers.values().toArray().filter(func(c) { c.sectionId == sectionId });
   };
 
-  public query ({ caller }) func getComputersWithExpiringAMC(days : Int) : async [Computer] {
+  public query func getComputersWithExpiringAMC(days : Int) : async [Computer] {
     let now = Time.now();
     let expiryThreshold = now + (days * 24 * 3600 * 1000000000);
     computers.values().toArray().filter(func(c) {
@@ -183,14 +178,14 @@ actor {
     });
   };
 
-  public shared ({ caller }) func updateComputer(computer : Computer) : async () {
+  public shared func updateComputer(computer : Computer) : async () {
     switch (computers.get(computer.id)) {
       case (null) {};
       case (?_) { computers.add(computer.id, computer) };
     };
   };
 
-  public shared ({ caller }) func deleteComputer(id : Text) : async () {
+  public shared func deleteComputer(id : Text) : async () {
     switch (computers.get(id)) {
       case (null) {};
       case (?_) { computers.remove(id) };
@@ -198,26 +193,26 @@ actor {
   };
 
   // StandbySystem CRUD
-  public shared ({ caller }) func createStandbySystem(standbySystem : StandbySystem) : async () {
+  public shared func createStandbySystem(standbySystem : StandbySystem) : async () {
     standbySystems.add(standbySystem.id, standbySystem);
   };
 
-  public query ({ caller }) func getStandbySystem(id : Text) : async ?StandbySystem {
+  public query func getStandbySystem(id : Text) : async ?StandbySystem {
     standbySystems.get(id);
   };
 
-  public query ({ caller }) func getAllStandbySystems() : async [StandbySystem] {
+  public query func getAllStandbySystems() : async [StandbySystem] {
     standbySystems.values().toArray();
   };
 
-  public shared ({ caller }) func updateStandbySystem(standbySystem : StandbySystem) : async () {
+  public shared func updateStandbySystem(standbySystem : StandbySystem) : async () {
     switch (standbySystems.get(standbySystem.id)) {
       case (null) {};
       case (?_) { standbySystems.add(standbySystem.id, standbySystem) };
     };
   };
 
-  public shared ({ caller }) func deleteStandbySystem(id : Text) : async () {
+  public shared func deleteStandbySystem(id : Text) : async () {
     switch (standbySystems.get(id)) {
       case (null) {};
       case (?_) { standbySystems.remove(id) };
@@ -225,27 +220,23 @@ actor {
   };
 
   // Complaint CRUD
-  public shared ({ caller }) func createComplaint(complaint : Complaint) : async () {
+  public shared func createComplaint(complaint : Complaint) : async () {
     complaints.add(complaint.id, complaint);
   };
 
-  public query ({ caller }) func getComplaint(id : Text) : async ?Complaint {
+  public query func getComplaint(id : Text) : async ?Complaint {
     complaints.get(id);
   };
 
-  public query ({ caller }) func getAllComplaints() : async [Complaint] {
+  public query func getAllComplaints() : async [Complaint] {
     complaints.values().toArray();
   };
 
-  public query ({ caller }) func getComplaintsByStatus(
-    status : ComplaintStatus
-  ) : async [Complaint] {
+  public query func getComplaintsByStatus(status : ComplaintStatus) : async [Complaint] {
     complaints.values().toArray().filter(func(c) { c.status == status });
   };
 
-  public query ({ caller }) func getComplaintsBySection(
-    sectionId : Text
-  ) : async [Complaint] {
+  public query func getComplaintsBySection(sectionId : Text) : async [Complaint] {
     complaints.values().toArray().filter(func(c) {
       switch (c.sectionId) {
         case (null) { false };
@@ -254,9 +245,7 @@ actor {
     });
   };
 
-  public query ({ caller }) func getComplaintsByComputer(
-    computerId : Text
-  ) : async [Complaint] {
+  public query func getComplaintsByComputer(computerId : Text) : async [Complaint] {
     complaints.values().toArray().filter(func(c) {
       switch (c.computerId) {
         case (null) { false };
@@ -265,14 +254,14 @@ actor {
     });
   };
 
-  public shared ({ caller }) func updateComplaint(complaint : Complaint) : async () {
+  public shared func updateComplaint(complaint : Complaint) : async () {
     switch (complaints.get(complaint.id)) {
       case (null) {};
       case (?_) { complaints.add(complaint.id, complaint) };
     };
   };
 
-  public shared ({ caller }) func deleteComplaint(id : Text) : async () {
+  public shared func deleteComplaint(id : Text) : async () {
     switch (complaints.get(id)) {
       case (null) {};
       case (?_) { complaints.remove(id) };
@@ -280,19 +269,19 @@ actor {
   };
 
   // AMCPart CRUD
-  public shared ({ caller }) func createAMCPart(part : AMCPart) : async () {
+  public shared func createAMCPart(part : AMCPart) : async () {
     amcParts.add(part.id, part);
   };
 
-  public query ({ caller }) func getAMCPart(id : Text) : async ?AMCPart {
+  public query func getAMCPart(id : Text) : async ?AMCPart {
     amcParts.get(id);
   };
 
-  public query ({ caller }) func getAllAMCParts() : async [AMCPart] {
+  public query func getAllAMCParts() : async [AMCPart] {
     amcParts.values().toArray();
   };
 
-  public query ({ caller }) func getExpiringAMCParts(days : Int) : async [AMCPart] {
+  public query func getExpiringAMCParts(days : Int) : async [AMCPart] {
     let now = Time.now();
     let expiryThreshold = now + (days * 24 * 3600 * 1000000000);
     amcParts.values().toArray().filter(func(p) {
@@ -303,14 +292,14 @@ actor {
     });
   };
 
-  public shared ({ caller }) func updateAMCPart(part : AMCPart) : async () {
+  public shared func updateAMCPart(part : AMCPart) : async () {
     switch (amcParts.get(part.id)) {
       case (null) {};
       case (?_) { amcParts.add(part.id, part) };
     };
   };
 
-  public shared ({ caller }) func deleteAMCPart(id : Text) : async () {
+  public shared func deleteAMCPart(id : Text) : async () {
     switch (amcParts.get(id)) {
       case (null) {};
       case (?_) { amcParts.remove(id) };
@@ -322,7 +311,7 @@ actor {
     userProfiles.get(caller);
   };
 
-  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+  public query func getUserProfile(user : Principal) : async ?UserProfile {
     userProfiles.get(user);
   };
 
@@ -330,12 +319,12 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // New StockEntry CRUD operations (no permission checks)
-  public shared ({ caller }) func createStockEntry(entry : StockEntry) : async () {
+  // StockEntry CRUD
+  public shared func createStockEntry(entry : StockEntry) : async () {
     stockEntries.add(entry.id, entry);
   };
 
-  public query ({ caller }) func getAllStockEntries() : async [StockEntry] {
+  public query func getAllStockEntries() : async [StockEntry] {
     stockEntries.values().toArray().sort(
       func(a, b) {
         if (a.slNo < b.slNo) { #less } else if (a.slNo > b.slNo) {
@@ -345,22 +334,21 @@ actor {
     );
   };
 
-  public shared ({ caller }) func updateStockEntry(entry : StockEntry) : async () {
+  public shared func updateStockEntry(entry : StockEntry) : async () {
     switch (stockEntries.get(entry.id)) {
       case (null) {};
       case (?_) { stockEntries.add(entry.id, entry) };
     };
   };
 
-  public shared ({ caller }) func deleteStockEntry(id : Text) : async () {
+  public shared func deleteStockEntry(id : Text) : async () {
     switch (stockEntries.get(id)) {
       case (null) {};
       case (?_) { stockEntries.remove(id) };
     };
   };
 
-  // New processStockEntries function (no permission check)
-  public shared ({ caller }) func processStockEntries() : async ProcessStockEntriesResult {
+  public shared func processStockEntries() : async ProcessStockEntriesResult {
     var updatedComputers = 0;
     var addedToStandby = 0;
 
@@ -368,7 +356,6 @@ actor {
     for (entry in entries.values()) {
       let cpuSlNo = entry.cpuSlNo;
 
-      // Try to find computer by serial number
       let computerMatch = computers.values().toArray().find(
         func(comp) {
           comp.serialNumber.toLower().contains(#text(cpuSlNo.toLower()));
@@ -377,7 +364,6 @@ actor {
 
       switch (computerMatch) {
         case (null) {
-          // No computer found, check for standby system
           let standbyExists = standbySystems.values().toArray().find(
             func(stby) {
               stby.serialNumber == cpuSlNo;
@@ -404,7 +390,6 @@ actor {
           };
         };
         case (?comp) {
-          // Computer found, update its fields
           let updatedComp : Computer = {
             comp with
             companyName = entry.companyAndModel;
@@ -424,8 +409,8 @@ actor {
     };
   };
 
-  // Dashboard Stats - accessible to all including guests
-  public query ({ caller }) func getDashboardStats() : async {
+  // Dashboard Stats
+  public query func getDashboardStats() : async {
     totalComputers : Nat;
     totalStandbySystems : Nat;
     openComplaints : Nat;
@@ -452,4 +437,10 @@ actor {
       totalSections = sections.size();
     };
   };
+
+  // Stubs for backward compatibility with frontend bindings
+  public shared func _initializeAccessControlWithSecret(_ : Text) : async () {};
+  public query func isCallerAdmin() : async Bool { false };
+  public query func getCallerUserRole() : async { #admin; #user; #guest } { #guest };
+  public shared func assignCallerUserRole(_ : Principal, _ : { #admin; #user; #guest }) : async () {};
 };
