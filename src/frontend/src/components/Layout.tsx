@@ -25,7 +25,7 @@ const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/computers", label: "Computers", icon: Monitor },
   { path: "/standby", label: "Standby Systems", icon: Server },
-  { path: "/complaints", label: "Complaints", icon: AlertTriangle },
+  { path: "/complaints", label: "Complaint Log", icon: AlertTriangle },
   { path: "/import", label: "Data Import", icon: Upload },
   { path: "/stock", label: "Stock Data", icon: Database },
 ];
