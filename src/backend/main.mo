@@ -226,7 +226,85 @@ actor {
   public shared func updateComputer(computer : Computer) : async () {
     switch (computers.get(computer.id)) {
       case (null) {};
-      case (?_) { computers.add(computer.id, computer) };
+      case (?old) {
+        // CPU serial changed: auto-move old serial to standby if no longer in use
+        if (old.serialNumber != "" and old.serialNumber != computer.serialNumber) {
+          let cpuInUse = computers.values().toArray().find(func(c) {
+            c.id != computer.id and c.serialNumber == old.serialNumber
+          });
+          switch (cpuInUse) {
+            case (null) {
+              let alreadyInStandby = standbySystems.values().toArray().find(func(s) {
+                s.serialNumber == old.serialNumber
+              });
+              switch (alreadyInStandby) {
+                case (null) {
+                  let newStandby : StandbySystem = {
+                    id = old.serialNumber # "_cpu_standby";
+                    serialNumber = old.serialNumber;
+                    model = old.model;
+                    brand = old.brand;
+                    condition = #good;
+                    status = #available;
+                    assignedSectionId = null;
+                    notes = "Auto-moved from section " # old.sectionId;
+                    createdAt = Time.now();
+                  };
+                  standbySystems.add(newStandby.id, newStandby);
+                };
+                case (?_) {};
+              };
+            };
+            case (?_) {};
+          };
+        };
+        // Remove new CPU serial from standby if present
+        if (computer.serialNumber != "") {
+          switch (standbySystems.values().toArray().find(func(s) { s.serialNumber == computer.serialNumber })) {
+            case (null) {};
+            case (?s) { standbySystems.remove(s.id) };
+          };
+        };
+        // Monitor serial changed: auto-move old monitor serial to standby if no longer in use
+        if (old.monitorSerial != "" and old.monitorSerial != computer.monitorSerial) {
+          let monInUse = computers.values().toArray().find(func(c) {
+            c.id != computer.id and c.monitorSerial == old.monitorSerial
+          });
+          switch (monInUse) {
+            case (null) {
+              let alreadyInStandby = standbySystems.values().toArray().find(func(s) {
+                s.serialNumber == old.monitorSerial
+              });
+              switch (alreadyInStandby) {
+                case (null) {
+                  let newMonStandby : StandbySystem = {
+                    id = old.monitorSerial # "_mon_standby";
+                    serialNumber = old.monitorSerial;
+                    model = old.monitorModel;
+                    brand = old.brand;
+                    condition = #good;
+                    status = #available;
+                    assignedSectionId = null;
+                    notes = "Auto-moved monitor from section " # old.sectionId;
+                    createdAt = Time.now();
+                  };
+                  standbySystems.add(newMonStandby.id, newMonStandby);
+                };
+                case (?_) {};
+              };
+            };
+            case (?_) {};
+          };
+        };
+        // Remove new monitor serial from standby if present
+        if (computer.monitorSerial != "") {
+          switch (standbySystems.values().toArray().find(func(s) { s.serialNumber == computer.monitorSerial })) {
+            case (null) {};
+            case (?s) { standbySystems.remove(s.id) };
+          };
+        };
+        computers.add(computer.id, computer);
+      };
     };
   };
 
