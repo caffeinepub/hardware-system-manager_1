@@ -11,9 +11,9 @@ import {
   LogOut,
   Menu,
   Monitor,
+  Package,
   Server,
   ShieldCheck,
-  Upload,
   User,
   X,
 } from "lucide-react";
@@ -26,7 +26,7 @@ const navItems = [
   { path: "/computers", label: "Computers", icon: Monitor },
   { path: "/standby", label: "Standby Systems", icon: Server },
   { path: "/complaints", label: "Complaint Log", icon: AlertTriangle },
-  { path: "/import", label: "Data Import", icon: Upload },
+  { path: "/other-devices", label: "Other Devices", icon: Package },
   { path: "/stock", label: "Stock Data", icon: Database },
 ];
 

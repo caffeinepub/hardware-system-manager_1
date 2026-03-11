@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -37,16 +39,32 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Edit2, FileText, Monitor, Plus, Trash2, Upload } from "lucide-react";
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Download,
+  Edit2,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+  Monitor,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Computer } from "../backend";
 import type { Variant_active_standby_retired } from "../backend";
 import { ExternalBlob } from "../backend";
 import { useAdmin } from "../contexts/AdminContext";
+import { useActor } from "../hooks/useActor";
 import {
   useCreateComputer,
+  useCreateSection,
   useDeleteComputer,
   useGetAllComputers,
   useGetAllSections,
@@ -83,9 +101,12 @@ export default function Computers() {
   const { isLoggedIn } = useAdmin();
   const { data: computers = [], isLoading } = useGetAllComputers();
   const { data: sections = [] } = useGetAllSections();
-  const createMutation = useCreateComputer();
+  const createComputerMutation = useCreateComputer();
   const updateMutation = useUpdateComputer();
   const deleteMutation = useDeleteComputer();
+  const createSectionMutation = useCreateSection();
+  const { actor, isFetching: isActorFetching } = useActor();
+  const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -94,6 +115,258 @@ export default function Computers() {
   const [form, setForm] = useState(emptyForm());
   const [datasheetFile, setDatasheetFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+
+  // ---- Data Import state ----
+  const [importRows, setImportRows] = useState<
+    Array<{
+      sectionName: string;
+      seat: string;
+      currentUser: string;
+      cpuSerial: string;
+      cpuModel: string;
+      monitorSerial: string;
+      monitorModel: string;
+      ip1: string;
+      ip2: string;
+      remarks: string;
+    }>
+  >([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importDone, setImportDone] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(0);
+  const [importErrors, setImportErrors] = useState(0);
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const CSV_IMPORT_HEADERS = [
+    "Section Name",
+    "Seat",
+    "Current User Name",
+    "CPU Serial Number",
+    "CPU Model",
+    "Monitor Serial Number",
+    "Monitor Model",
+    "IP 1",
+    "IP 2",
+    "Remarks",
+  ];
+
+  function parseCSVLine(line: string): string[] {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        result.push(current);
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+
+  const handleImportFile = async (file: File) => {
+    if (!file.name.endsWith(".csv")) {
+      toast.error("Please select a .csv file");
+      return;
+    }
+    const text = await file.text();
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length < 2) {
+      toast.error("No data rows found in CSV");
+      return;
+    }
+    const rows = lines
+      .slice(1)
+      .map((line) => {
+        const cols = parseCSVLine(line);
+        return {
+          sectionName: (cols[0] ?? "").trim(),
+          seat: (cols[1] ?? "").trim(),
+          currentUser: (cols[2] ?? "").trim(),
+          cpuSerial: (cols[3] ?? "").trim(),
+          cpuModel: (cols[4] ?? "").trim(),
+          monitorSerial: (cols[5] ?? "").trim(),
+          monitorModel: (cols[6] ?? "").trim(),
+          ip1: (cols[7] ?? "").trim(),
+          ip2: (cols[8] ?? "").trim(),
+          remarks: (cols[9] ?? "").trim(),
+        };
+      })
+      .filter((r) => r.sectionName || r.cpuSerial || r.seat);
+    setImportRows(rows);
+    setImportFileName(file.name);
+    setImportDone(false);
+    setImportProgress(0);
+    setImportSuccess(0);
+    setImportErrors(0);
+    if (rows.length === 0) toast.error("No valid rows found");
+    else toast.success(`${rows.length} rows parsed`);
+  };
+
+  const downloadImportTemplate = () => {
+    const blob = new Blob(
+      [
+        `${CSV_IMPORT_HEADERS.join(",")}
+`,
+      ],
+      {
+        type: "text/csv;charset=utf-8;",
+      },
+    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "device_import_template.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadExportCSV = () => {
+    const rows = computers.map((c, i) => {
+      const sec = sections.find((s) => s.id === c.sectionId);
+      return [
+        i + 1,
+        sec?.name ?? "",
+        c.seatNumber,
+        c.currentUser,
+        c.model,
+        c.serialNumber,
+        c.monitorModel,
+        c.monitorSerial,
+        c.ip1,
+        c.ip2,
+        c.remarks,
+      ]
+        .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
+        .join(",");
+    });
+    const header = [
+      "Sl No",
+      "Section Name",
+      "Seat",
+      "Current User",
+      "CPU Model",
+      "CPU Serial",
+      "Monitor Model",
+      "Monitor Serial",
+      "IP 1",
+      "IP 2",
+      "Remarks",
+    ].join(",");
+    const blob = new Blob([[header, ...rows].join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "computers_export.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRunImport = async () => {
+    if (!isLoggedIn) {
+      toast.error("Please log in first");
+      return;
+    }
+    if (isActorFetching || !actor) {
+      toast.error("Backend not ready");
+      return;
+    }
+    if (importRows.length === 0) return;
+    setIsImporting(true);
+    setImportProgress(0);
+    const sectionMap = new Map<string, string>(
+      sections.map((s) => [s.name.toLowerCase(), s.id]),
+    );
+    let successes = 0;
+    let errors = 0;
+    for (let i = 0; i < importRows.length; i++) {
+      const row = importRows[i];
+      try {
+        const sectionKey = row.sectionName.toLowerCase();
+        let sectionId = sectionMap.get(sectionKey);
+        if (!sectionId && row.sectionName) {
+          const newId = crypto.randomUUID();
+          await createSectionMutation.mutateAsync({
+            id: newId,
+            name: row.sectionName,
+            description: "",
+            location: "",
+            createdAt: BigInt(Date.now()),
+          });
+          sectionId = newId;
+          sectionMap.set(sectionKey, newId);
+        }
+        if (!sectionId) {
+          errors++;
+          setImportProgress(Math.round(((i + 1) / importRows.length) * 100));
+          continue;
+        }
+        await createComputerMutation.mutateAsync({
+          id: crypto.randomUUID(),
+          sectionId,
+          seatNumber: row.seat,
+          currentUser: row.currentUser,
+          serialNumber: row.cpuSerial,
+          model: row.cpuModel,
+          brand: "",
+          companyName: "",
+          amcCompany: "",
+          monitorSerial: row.monitorSerial,
+          monitorModel: row.monitorModel,
+          ip1: row.ip1,
+          ip2: row.ip2,
+          remarks: row.remarks,
+          purchaseDate: BigInt(0),
+          amcStartDate: BigInt(0),
+          amcEndDate: BigInt(0),
+          status: "active" as Variant_active_standby_retired,
+          notes: "",
+          createdAt: BigInt(Date.now()),
+        });
+        successes++;
+      } catch {
+        errors++;
+      }
+      setImportProgress(Math.round(((i + 1) / importRows.length) * 100));
+    }
+    await queryClient.invalidateQueries({ queryKey: ["computers"] });
+    await queryClient.invalidateQueries({ queryKey: ["sections"] });
+    setImportSuccess(successes);
+    setImportErrors(errors);
+    setIsImporting(false);
+    setImportDone(true);
+    if (errors === 0)
+      toast.success(`${successes} devices imported successfully`);
+    else toast.error(`Import: ${successes} succeeded, ${errors} failed`);
+  };
+
+  const resetImport = () => {
+    setImportRows([]);
+    setImportFileName("");
+    setImportDone(false);
+    setImportProgress(0);
+    setImportSuccess(0);
+    setImportErrors(0);
+    if (importFileRef.current) importFileRef.current.value = "";
+  };
+  // ---- End Data Import state ----
 
   const openAdd = () => {
     setEditingComputer(null);
@@ -185,7 +458,7 @@ export default function Computers() {
         await updateMutation.mutateAsync(computerData);
         toast.success("Computer updated");
       } else {
-        await createMutation.mutateAsync(computerData);
+        await createComputerMutation.mutateAsync(computerData);
         toast.success("Computer created");
       }
       setDialogOpen(false);
@@ -205,7 +478,8 @@ export default function Computers() {
     }
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending =
+    createComputerMutation.isPending || updateMutation.isPending;
 
   // Fixed section name ordering
   const SECTION_ORDER = [
@@ -501,6 +775,218 @@ export default function Computers() {
           })}
         </div>
       )}
+
+      {/* Computer Asset Data Import / Export */}
+      <div className="mt-8 space-y-4" data-ocid="computers.import.section">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-display font-bold text-foreground">
+              Computer Asset Data Import / Export
+            </h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Bulk import device records from CSV or export current data
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={downloadImportTemplate}
+              data-ocid="computers.import.secondary_button"
+            >
+              <Download className="w-4 h-4" /> Download Template
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={downloadExportCSV}
+              data-ocid="computers.import.secondary_button"
+            >
+              <Download className="w-4 h-4" /> Export CSV
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            Expected CSV Columns
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {CSV_IMPORT_HEADERS.map((h) => (
+              <Badge key={h} variant="outline" className="text-xs font-mono">
+                {h}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
+        {isLoggedIn ? (
+          <>
+            <button
+              type="button"
+              className={`w-full text-left rounded-xl border-2 border-dashed transition-all cursor-pointer ${isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/20"}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const f = e.dataTransfer.files[0];
+                if (f) handleImportFile(f);
+              }}
+              onClick={() => importFileRef.current?.click()}
+              data-ocid="computers.import.dropzone"
+            >
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleImportFile(f);
+                }}
+                data-ocid="computers.import.upload_button"
+              />
+              <div className="flex flex-col items-center justify-center py-10 gap-3 pointer-events-none">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Upload
+                    className={`w-5 h-5 ${isDragging ? "text-primary" : "text-primary/60"}`}
+                  />
+                </div>
+                {importFileName ? (
+                  <>
+                    <p className="font-display font-semibold text-foreground">
+                      {importFileName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {importRows.length} rows found — click to replace
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-display font-semibold text-foreground">
+                      Drop CSV file here
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      or click to browse — .csv files only
+                    </p>
+                  </>
+                )}
+              </div>
+            </button>
+
+            {isImporting && (
+              <div
+                className="rounded-xl border border-border bg-card p-4 space-y-2"
+                data-ocid="computers.import.loading_state"
+              >
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                  <p className="text-sm font-semibold">
+                    Importing… {importProgress}%
+                  </p>
+                </div>
+                <Progress value={importProgress} className="h-2" />
+              </div>
+            )}
+
+            {importDone && !isImporting && (
+              <div
+                className={`rounded-xl border p-4 ${importErrors === 0 ? "border-green-200 bg-green-50" : "border-yellow-200 bg-yellow-50"}`}
+                data-ocid={
+                  importErrors === 0
+                    ? "computers.import.success_state"
+                    : "computers.import.error_state"
+                }
+              >
+                <div className="flex items-center gap-2">
+                  {importErrors === 0 ? (
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-yellow-600" />
+                  )}
+                  <p className="font-semibold text-sm">
+                    Import Complete —{" "}
+                    <span className="text-green-700">
+                      {importSuccess} imported
+                    </span>
+                    {importErrors > 0 && (
+                      <span className="text-red-600">
+                        , {importErrors} failed
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {importRows.length > 0 && !isImporting && (
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">
+                  <span className="text-primary">
+                    {importRows.length} rows ready
+                  </span>
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 text-muted-foreground"
+                    onClick={resetImport}
+                  >
+                    <X className="w-4 h-4" />
+                    Clear
+                  </Button>
+                  {importDone ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={resetImport}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Import Another
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="gap-2"
+                      onClick={handleRunImport}
+                      disabled={isImporting || isActorFetching}
+                      data-ocid="computers.import.primary_button"
+                    >
+                      {isImporting || isActorFetching ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      {isActorFetching
+                        ? "Connecting…"
+                        : `Import ${importRows.length} Rows`}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div
+            className="rounded-xl border-2 border-dashed border-border p-8 text-center text-muted-foreground"
+            data-ocid="computers.import.section"
+          >
+            <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="font-semibold">Login required to import data</p>
+            <p className="text-sm mt-1">
+              Log in as Admin or User to use the import feature.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

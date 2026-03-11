@@ -7,8 +7,6 @@ import MixinStorage "blob-storage/Mixin";
 import AccessControl "authorization/access-control";
 
 actor {
-  // Keep accessControlState as a stable variable for upgrade compatibility.
-  // It is no longer used for authorization — all functions are open.
   let accessControlState = AccessControl.initState();
 
   include MixinStorage();
@@ -112,19 +110,66 @@ actor {
     createdAt : Int;
   };
 
+  type OtherDevice = {
+    id : Text;
+    slNo : Nat;
+    unitArticle : Text;
+    makeAndModel : Text;
+    serialNumber : Text;
+    section : Text;
+    ipAddress : Text;
+    workingStatus : Text;
+    remarks : Text;
+    createdAt : Int;
+  };
+
   type ProcessStockEntriesResult = {
     updated : Nat;
     addedToStandby : Nat;
   };
 
-  // Stores
-  let sections = Map.empty<Text, Section>();
-  let computers = Map.empty<Text, Computer>();
-  let standbySystems = Map.empty<Text, StandbySystem>();
-  let complaints = Map.empty<Text, Complaint>();
-  let amcParts = Map.empty<Text, AMCPart>();
-  let stockEntries = Map.empty<Text, StockEntry>();
-  let userProfiles = Map.empty<Principal, UserProfile>();
+  // ── Stable storage arrays (survive upgrades) ──────────────────────────────
+  stable var sectionsStable       : [(Text, Section)]       = [];
+  stable var computersStable      : [(Text, Computer)]      = [];
+  stable var standbyStable        : [(Text, StandbySystem)] = [];
+  stable var complaintsStable     : [(Text, Complaint)]     = [];
+  stable var amcPartsStable       : [(Text, AMCPart)]       = [];
+  stable var stockEntriesStable   : [(Text, StockEntry)]    = [];
+  stable var userProfilesStable   : [(Principal, UserProfile)] = [];
+  stable var otherDevicesStable   : [(Text, OtherDevice)]   = [];
+
+  // ── In-memory maps ────────────────────────────────────────────────────────
+  let sections      = Map.fromIter<Text, Section>(sectionsStable.vals());
+  let computers     = Map.fromIter<Text, Computer>(computersStable.vals());
+  let standbySystems = Map.fromIter<Text, StandbySystem>(standbyStable.vals());
+  let complaints    = Map.fromIter<Text, Complaint>(complaintsStable.vals());
+  let amcParts      = Map.fromIter<Text, AMCPart>(amcPartsStable.vals());
+  let stockEntries  = Map.fromIter<Text, StockEntry>(stockEntriesStable.vals());
+  let userProfiles  = Map.fromIter<Principal, UserProfile>(userProfilesStable.vals());
+  let otherDevices  = Map.fromIter<Text, OtherDevice>(otherDevicesStable.vals());
+
+  // ── Upgrade hooks ─────────────────────────────────────────────────────────
+  system func preupgrade() {
+    sectionsStable     := sections.entries().toArray();
+    computersStable    := computers.entries().toArray();
+    standbyStable      := standbySystems.entries().toArray();
+    complaintsStable   := complaints.entries().toArray();
+    amcPartsStable     := amcParts.entries().toArray();
+    stockEntriesStable := stockEntries.entries().toArray();
+    userProfilesStable := userProfiles.entries().toArray();
+    otherDevicesStable := otherDevices.entries().toArray();
+  };
+
+  system func postupgrade() {
+    sectionsStable     := [];
+    computersStable    := [];
+    standbyStable      := [];
+    complaintsStable   := [];
+    amcPartsStable     := [];
+    stockEntriesStable := [];
+    userProfilesStable := [];
+    otherDevicesStable := [];
+  };
 
   // Section CRUD
   public shared func createSection(section : Section) : async () {
@@ -409,6 +454,33 @@ actor {
     };
   };
 
+  // OtherDevice CRUD
+  public shared func createOtherDevice(device : OtherDevice) : async () {
+    otherDevices.add(device.id, device);
+  };
+
+  public query func getAllOtherDevices() : async [OtherDevice] {
+    otherDevices.values().toArray().sort(
+      func(a, b) {
+        if (a.slNo < b.slNo) { #less } else if (a.slNo > b.slNo) { #greater } else { #equal };
+      }
+    );
+  };
+
+  public shared func updateOtherDevice(device : OtherDevice) : async () {
+    switch (otherDevices.get(device.id)) {
+      case (null) {};
+      case (?_) { otherDevices.add(device.id, device) };
+    };
+  };
+
+  public shared func deleteOtherDevice(id : Text) : async () {
+    switch (otherDevices.get(id)) {
+      case (null) {};
+      case (?_) { otherDevices.remove(id) };
+    };
+  };
+
   // Dashboard Stats
   public query func getDashboardStats() : async {
     totalComputers : Nat;
@@ -416,6 +488,9 @@ actor {
     openComplaints : Nat;
     computersWithExpiringAMC : Nat;
     totalSections : Nat;
+    pendingComplaints : Nat;
+    clearedComplaints : Nat;
+    inProgressComplaints : Nat;
   } {
     let now = Time.now();
     let thirtyDaysInNanos = 30 * 24 * 3600 * 1000000000;
@@ -429,12 +504,23 @@ actor {
       c.status == #open
     }).size();
 
+    let inProgressCount = complaints.values().toArray().filter(func(c) {
+      c.status == #inProgress
+    }).size();
+
+    let resolvedCount = complaints.values().toArray().filter(func(c) {
+      c.status == #resolved
+    }).size();
+
     {
       totalComputers = computers.size();
       totalStandbySystems = standbySystems.size();
       openComplaints = openCount;
       computersWithExpiringAMC = expiringCount;
       totalSections = sections.size();
+      pendingComplaints = openCount + inProgressCount;
+      clearedComplaints = resolvedCount;
+      inProgressComplaints = inProgressCount;
     };
   };
 

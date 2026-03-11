@@ -3,6 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertTriangle,
   Building2,
+  CheckCircle2,
   Clock,
   Monitor,
   Server,
@@ -25,6 +26,7 @@ import {
 import { useGetDashboardStats } from "../hooks/useQueries";
 import { useGetAllComputers } from "../hooks/useQueries";
 import { useGetAllComplaints } from "../hooks/useQueries";
+import { useGetAllStandbySystems } from "../hooks/useQueries";
 
 const CHART_COLORS = [
   "oklch(0.52 0.14 195)",
@@ -40,12 +42,14 @@ function StatCard({
   icon: Icon,
   color,
   loading,
+  sub,
 }: {
   title: string;
   value: string | number;
   icon: React.ElementType;
   color: string;
   loading?: boolean;
+  sub?: string;
 }) {
   return (
     <Card
@@ -65,6 +69,9 @@ function StatCard({
                 {value}
               </p>
             )}
+            {sub && !loading && (
+              <p className="text-xs text-muted-foreground">{sub}</p>
+            )}
           </div>
           <div
             className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}
@@ -83,6 +90,8 @@ export default function Dashboard() {
     useGetAllComputers();
   const { data: complaints = [], isLoading: complaintsLoading } =
     useGetAllComplaints();
+  const { data: standbySystems = [], isLoading: standbyLoading } =
+    useGetAllStandbySystems();
 
   // AMC expiry timeline - group computers by AMC end month (next 12 months)
   const amcTimelineData = useMemo(() => {
@@ -96,7 +105,8 @@ export default function Dashboard() {
       });
     }
     for (const c of computers) {
-      const endDate = new Date(Number(c.amcEndDate));
+      const endMs = Number(c.amcEndDate) / 1_000_000; // nanoseconds to ms
+      const endDate = new Date(endMs);
       for (let i = 0; i < 12; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
         const nextD = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
@@ -108,41 +118,51 @@ export default function Dashboard() {
     return months;
   }, [computers]);
 
-  // Complaint status breakdown
+  // Complaint status breakdown: Pending (open+inProgress) vs Cleared (resolved)
   const complaintStatusData = useMemo(() => {
-    const counts: Record<string, number> = {
-      open: 0,
-      inProgress: 0,
-      resolved: 0,
-    };
+    let pending = 0;
+    let cleared = 0;
+    let inProgress = 0;
     for (const c of complaints) {
-      counts[c.status] = (counts[c.status] || 0) + 1;
+      if (c.status === "open") pending++;
+      else if (c.status === "inProgress") inProgress++;
+      else if (c.status === "resolved") cleared++;
     }
     return [
-      { name: "Open", value: counts.open, color: CHART_COLORS[3] },
-      { name: "In Progress", value: counts.inProgress, color: CHART_COLORS[2] },
-      { name: "Resolved", value: counts.resolved, color: CHART_COLORS[1] },
+      { name: "Pending", value: pending + inProgress, color: CHART_COLORS[3] },
+      { name: "Cleared", value: cleared, color: CHART_COLORS[1] },
     ].filter((d) => d.value > 0);
   }, [complaints]);
 
-  // Computer status distribution
-  const computerStatusData = useMemo(() => {
-    const counts: Record<string, number> = {
-      active: 0,
-      standby: 0,
-      retired: 0,
-    };
-    for (const c of computers) {
-      counts[c.status] = (counts[c.status] || 0) + 1;
+  // Standby condition breakdown
+  const standbyConditionData = useMemo(() => {
+    const counts: Record<string, number> = { good: 0, fair: 0, poor: 0 };
+    for (const s of standbySystems) {
+      counts[s.condition] = (counts[s.condition] || 0) + 1;
     }
     return [
-      { name: "Active", value: counts.active, color: CHART_COLORS[1] },
-      { name: "Standby", value: counts.standby, color: CHART_COLORS[0] },
-      { name: "Retired", value: counts.retired, color: CHART_COLORS[3] },
+      { name: "Good", value: counts.good, color: CHART_COLORS[1] },
+      { name: "Fair", value: counts.fair, color: CHART_COLORS[2] },
+      { name: "Poor", value: counts.poor, color: CHART_COLORS[3] },
     ].filter((d) => d.value > 0);
-  }, [computers]);
+  }, [standbySystems]);
 
-  const isLoading = statsLoading || computersLoading || complaintsLoading;
+  const pendingCount = useMemo(() => {
+    const s = stats as any;
+    if (s?.pendingComplaints !== undefined) return Number(s.pendingComplaints);
+    return complaints.filter(
+      (c) => c.status === "open" || c.status === "inProgress",
+    ).length;
+  }, [stats, complaints]);
+
+  const clearedCount = useMemo(() => {
+    const s = stats as any;
+    if (s?.clearedComplaints !== undefined) return Number(s.clearedComplaints);
+    return complaints.filter((c) => c.status === "resolved").length;
+  }, [stats, complaints]);
+
+  const isLoading =
+    statsLoading || computersLoading || complaintsLoading || standbyLoading;
 
   return (
     <div className="space-y-6 animate-fade-in" data-ocid="dashboard.section">
@@ -151,12 +171,12 @@ export default function Dashboard() {
           Dashboard
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Overview of your hardware infrastructure
+          Overview of hardware infrastructure
         </p>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard
           title="Total Sections"
           value={isLoading ? "—" : Number(stats?.totalSections ?? 0)}
@@ -179,10 +199,17 @@ export default function Dashboard() {
           loading={isLoading}
         />
         <StatCard
-          title="Open Complaints"
-          value={isLoading ? "—" : Number(stats?.openComplaints ?? 0)}
+          title="Pending Complaints"
+          value={isLoading ? "—" : pendingCount}
           icon={AlertTriangle}
           color="bg-orange-100 text-orange-700"
+          loading={isLoading}
+        />
+        <StatCard
+          title="Cleared Complaints"
+          value={isLoading ? "—" : clearedCount}
+          icon={CheckCircle2}
+          color="bg-green-100 text-green-700"
           loading={isLoading}
         />
         <StatCard
@@ -204,7 +231,7 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary" />
-              AMC Expiry Timeline
+              AMC Expiry Timeline (Next 12 Months)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -250,7 +277,7 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-orange-500" />
-              Complaint Status
+              Complaint Register Status
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -261,66 +288,83 @@ export default function Dashboard() {
                 className="h-52 flex flex-col items-center justify-center text-muted-foreground gap-2"
                 data-ocid="dashboard.empty_state"
               >
-                <AlertTriangle className="w-8 h-8 opacity-30" />
-                <p className="text-sm">No complaints yet</p>
+                <CheckCircle2 className="w-8 h-8 opacity-30" />
+                <p className="text-sm">No complaints logged</p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={complaintStatusData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {complaintStatusData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(1 0 0)",
-                      border: "1px solid oklch(0.88 0.015 240)",
-                      borderRadius: "8px",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Legend iconSize={10} iconType="circle" />
-                </PieChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={complaintStatusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={75}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {complaintStatusData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: "oklch(1 0 0)",
+                        border: "1px solid oklch(0.88 0.015 240)",
+                        borderRadius: "8px",
+                        fontSize: 12,
+                      }}
+                    />
+                    <Legend iconSize={10} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex justify-around text-center text-sm mt-1">
+                  <div>
+                    <p className="font-display font-bold text-orange-600 text-lg">
+                      {pendingCount}
+                    </p>
+                    <p className="text-muted-foreground text-xs">Pending</p>
+                  </div>
+                  <div>
+                    <p className="font-display font-bold text-green-600 text-lg">
+                      {clearedCount}
+                    </p>
+                    <p className="text-muted-foreground text-xs">Cleared</p>
+                  </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Computer Status Distribution */}
+      {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Standby condition */}
         <Card className="shadow-card" data-ocid="dashboard.chart_point">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display flex items-center gap-2">
-              <Monitor className="w-4 h-4 text-teal-600" />
-              Computer Status
+              <Server className="w-4 h-4 text-blue-600" />
+              Standby Condition
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {computersLoading ? (
+            {standbyLoading ? (
               <Skeleton className="h-52 w-full" />
-            ) : computerStatusData.length === 0 ? (
+            ) : standbyConditionData.length === 0 ? (
               <div
                 className="h-52 flex flex-col items-center justify-center text-muted-foreground gap-2"
                 data-ocid="dashboard.empty_state"
               >
-                <Monitor className="w-8 h-8 opacity-30" />
-                <p className="text-sm">No computers yet</p>
+                <Server className="w-8 h-8 opacity-30" />
+                <p className="text-sm">No standby systems</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie
-                    data={computerStatusData}
+                    data={standbyConditionData}
                     cx="50%"
                     cy="50%"
                     innerRadius={55}
@@ -328,7 +372,7 @@ export default function Dashboard() {
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {computerStatusData.map((entry) => (
+                    {standbyConditionData.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
@@ -347,6 +391,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        {/* Quick Status */}
         <Card className="lg:col-span-2 shadow-card" data-ocid="dashboard.card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display">
@@ -355,12 +400,12 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-3">
             {isLoading
-              ? ["sk1", "sk2", "sk3", "sk4"].map((sk) => (
+              ? ["sk1", "sk2", "sk3", "sk4", "sk5"].map((sk) => (
                   <Skeleton key={sk} className="h-10 w-full" />
                 ))
               : [
                   {
-                    label: "Total Sections registered",
+                    label: "Total sections registered",
                     val: Number(stats?.totalSections ?? 0),
                     max: Math.max(Number(stats?.totalSections ?? 1), 1),
                     color: "bg-primary",
@@ -372,13 +417,20 @@ export default function Dashboard() {
                     color: "bg-teal-500",
                   },
                   {
-                    label: "Complaints open",
-                    val: Number(stats?.openComplaints ?? 0),
+                    label: "Standby systems available",
+                    val: standbySystems.filter((s) => s.status === "available")
+                      .length,
+                    max: Math.max(standbySystems.length, 1),
+                    color: "bg-blue-500",
+                  },
+                  {
+                    label: "Pending complaints",
+                    val: pendingCount,
                     max: Math.max(complaints.length, 1),
                     color: "bg-orange-500",
                   },
                   {
-                    label: "AMC expiring (30 days)",
+                    label: "AMC expiring in 30 days",
                     val: Number(stats?.computersWithExpiringAMC ?? 0),
                     max: Math.max(computers.length, 1),
                     color: "bg-red-500",

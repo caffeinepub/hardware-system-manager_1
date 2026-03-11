@@ -130,6 +130,18 @@ export interface Computer {
     seatNumber: string;
     monitorSerial: string;
 }
+export interface OtherDevice {
+    id: string;
+    slNo: bigint;
+    unitArticle: string;
+    makeAndModel: string;
+    serialNumber: string;
+    section: string;
+    ipAddress: string;
+    workingStatus: string;
+    remarks: string;
+    createdAt: bigint;
+}
 export interface ProcessStockEntriesResult {
     updated: bigint;
     addedToStandby: bigint;
@@ -279,6 +291,10 @@ export interface backendInterface {
     updateSection(section: Section): Promise<void>;
     updateStandbySystem(standbySystem: StandbySystem): Promise<void>;
     updateStockEntry(entry: StockEntry): Promise<void>;
+    createOtherDevice(device: OtherDevice): Promise<void>;
+    getAllOtherDevices(): Promise<Array<OtherDevice>>;
+    updateOtherDevice(device: OtherDevice): Promise<void>;
+    deleteOtherDevice(id: string): Promise<void>;
 }
 import type { AMCPart as _AMCPart, Complaint as _Complaint, ComplaintStatus as _ComplaintStatus, Computer as _Computer, ExternalBlob as _ExternalBlob, Priority as _Priority, Section as _Section, StandbySystem as _StandbySystem, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -988,6 +1004,30 @@ export class Backend implements backendInterface {
             const result = await this.actor.updateStockEntry(arg0);
             return result;
         }
+    }
+    async createOtherDevice(arg0: OtherDevice): Promise<void> {
+        if (this.processError) {
+            try { return await (this.actor as any).createOtherDevice(arg0); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).createOtherDevice(arg0); }
+    }
+    async getAllOtherDevices(): Promise<Array<OtherDevice>> {
+        if (this.processError) {
+            try { return await (this.actor as any).getAllOtherDevices(); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).getAllOtherDevices(); }
+    }
+    async updateOtherDevice(arg0: OtherDevice): Promise<void> {
+        if (this.processError) {
+            try { return await (this.actor as any).updateOtherDevice(arg0); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).updateOtherDevice(arg0); }
+    }
+    async deleteOtherDevice(id: string): Promise<void> {
+        if (this.processError) {
+            try { return await (this.actor as any).deleteOtherDevice(id); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).deleteOtherDevice(id); }
     }
 }
 function from_candid_AMCPart_n27(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _AMCPart): AMCPart {

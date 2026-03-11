@@ -127,6 +127,18 @@ export interface _CaffeineStorageRefillResult {
   'success' : [] | [boolean],
   'topped_up_amount' : [] | [bigint],
 }
+export interface OtherDevice {
+  'id' : string,
+  'slNo' : bigint,
+  'unitArticle' : string,
+  'makeAndModel' : string,
+  'serialNumber' : string,
+  'section' : string,
+  'ipAddress' : string,
+  'workingStatus' : string,
+  'remarks' : string,
+  'createdAt' : bigint,
+}
 export interface _SERVICE {
   '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
   '_caffeineStorageBlobsToDelete' : ActorMethod<[], Array<Uint8Array>>,
@@ -157,6 +169,10 @@ export interface _SERVICE {
   'deleteSection' : ActorMethod<[string], undefined>,
   'deleteStandbySystem' : ActorMethod<[string], undefined>,
   'deleteStockEntry' : ActorMethod<[string], undefined>,
+  'createOtherDevice' : ActorMethod<[OtherDevice], undefined>,
+  'getAllOtherDevices' : ActorMethod<[], Array<OtherDevice>>,
+  'updateOtherDevice' : ActorMethod<[OtherDevice], undefined>,
+  'deleteOtherDevice' : ActorMethod<[string], undefined>,
   'getAMCPart' : ActorMethod<[string], [] | [AMCPart]>,
   'getAllAMCParts' : ActorMethod<[], Array<AMCPart>>,
   'getAllComplaints' : ActorMethod<[], Array<Complaint>>,

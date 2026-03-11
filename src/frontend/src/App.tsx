@@ -14,7 +14,7 @@ import Complaints from "./pages/Complaints";
 import Computers from "./pages/Computers";
 // Pages
 import Dashboard from "./pages/Dashboard";
-import DataImport from "./pages/DataImport";
+import OtherDevices from "./pages/OtherDevices";
 import StandbySystems from "./pages/StandbySystems";
 import StockData from "./pages/StockData";
 import UserLogin from "./pages/UserLogin";
@@ -67,16 +67,16 @@ const userLoginRoute = createRoute({
   component: UserLogin,
 });
 
-const importRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/import",
-  component: DataImport,
-});
-
 const stockRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/stock",
   component: StockData,
+});
+
+const otherDevicesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/other-devices",
+  component: OtherDevices,
 });
 
 const routeTree = rootRoute.addChildren([
@@ -86,8 +86,8 @@ const routeTree = rootRoute.addChildren([
   complaintsRoute,
   adminRoute,
   userLoginRoute,
-  importRoute,
   stockRoute,
+  otherDevicesRoute,
 ]);
 
 const router = createRouter({ routeTree });

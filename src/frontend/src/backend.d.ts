@@ -48,6 +48,18 @@ export interface Computer {
     seatNumber: string;
     monitorSerial: string;
 }
+export interface OtherDevice {
+    id: string;
+    slNo: bigint;
+    unitArticle: string;
+    makeAndModel: string;
+    serialNumber: string;
+    section: string;
+    ipAddress: string;
+    workingStatus: string;
+    remarks: string;
+    createdAt: bigint;
+}
 export interface ProcessStockEntriesResult {
     updated: bigint;
     addedToStandby: bigint;
@@ -150,6 +162,10 @@ export interface backendInterface {
     deleteSection(id: string): Promise<void>;
     deleteStandbySystem(id: string): Promise<void>;
     deleteStockEntry(id: string): Promise<void>;
+    createOtherDevice(device: OtherDevice): Promise<void>;
+    getAllOtherDevices(): Promise<Array<OtherDevice>>;
+    updateOtherDevice(device: OtherDevice): Promise<void>;
+    deleteOtherDevice(id: string): Promise<void>;
     getAMCPart(id: string): Promise<AMCPart | null>;
     getAllAMCParts(): Promise<Array<AMCPart>>;
     getAllComplaints(): Promise<Array<Complaint>>;
