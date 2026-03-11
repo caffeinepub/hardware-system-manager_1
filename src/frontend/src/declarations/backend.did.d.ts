@@ -197,6 +197,9 @@ export interface _SERVICE {
       'computersWithExpiringAMC' : bigint,
       'openComplaints' : bigint,
       'totalSections' : bigint,
+      'pendingComplaints' : bigint,
+      'clearedComplaints' : bigint,
+      'inProgressComplaints' : bigint,
     }
   >,
   'getExpiringAMCParts' : ActorMethod<[bigint], Array<AMCPart>>,

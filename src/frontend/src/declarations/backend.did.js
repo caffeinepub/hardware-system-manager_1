@@ -224,6 +224,9 @@ export const idlService = IDL.Service({
           'computersWithExpiringAMC' : IDL.Nat,
           'openComplaints' : IDL.Nat,
           'totalSections' : IDL.Nat,
+          'pendingComplaints' : IDL.Nat,
+          'clearedComplaints' : IDL.Nat,
+          'inProgressComplaints' : IDL.Nat,
         }),
       ],
       ['query'],
@@ -249,6 +252,43 @@ export const idlService = IDL.Service({
   'updateSection' : IDL.Func([Section], [], []),
   'updateStandbySystem' : IDL.Func([StandbySystem], [], []),
   'updateStockEntry' : IDL.Func([StockEntry], [], []),
+  'createOtherDevice' : IDL.Func([IDL.Record({
+    'id' : IDL.Text,
+    'slNo' : IDL.Nat,
+    'unitArticle' : IDL.Text,
+    'makeAndModel' : IDL.Text,
+    'serialNumber' : IDL.Text,
+    'section' : IDL.Text,
+    'ipAddress' : IDL.Text,
+    'workingStatus' : IDL.Text,
+    'remarks' : IDL.Text,
+    'createdAt' : IDL.Int,
+  })], [], []),
+  'getAllOtherDevices' : IDL.Func([], [IDL.Vec(IDL.Record({
+    'id' : IDL.Text,
+    'slNo' : IDL.Nat,
+    'unitArticle' : IDL.Text,
+    'makeAndModel' : IDL.Text,
+    'serialNumber' : IDL.Text,
+    'section' : IDL.Text,
+    'ipAddress' : IDL.Text,
+    'workingStatus' : IDL.Text,
+    'remarks' : IDL.Text,
+    'createdAt' : IDL.Int,
+  }))], ['query']),
+  'updateOtherDevice' : IDL.Func([IDL.Record({
+    'id' : IDL.Text,
+    'slNo' : IDL.Nat,
+    'unitArticle' : IDL.Text,
+    'makeAndModel' : IDL.Text,
+    'serialNumber' : IDL.Text,
+    'section' : IDL.Text,
+    'ipAddress' : IDL.Text,
+    'workingStatus' : IDL.Text,
+    'remarks' : IDL.Text,
+    'createdAt' : IDL.Int,
+  })], [], []),
+  'deleteOtherDevice' : IDL.Func([IDL.Text], [], []),
 });
 
 export const idlInitArgs = [];
@@ -383,6 +423,18 @@ export const idlFactory = ({ IDL }) => {
     'updated' : IDL.Nat,
     'addedToStandby' : IDL.Nat,
   });
+  const OtherDevice = IDL.Record({
+    'id' : IDL.Text,
+    'slNo' : IDL.Nat,
+    'unitArticle' : IDL.Text,
+    'makeAndModel' : IDL.Text,
+    'serialNumber' : IDL.Text,
+    'section' : IDL.Text,
+    'ipAddress' : IDL.Text,
+    'workingStatus' : IDL.Text,
+    'remarks' : IDL.Text,
+    'createdAt' : IDL.Int,
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -470,6 +522,9 @@ export const idlFactory = ({ IDL }) => {
             'computersWithExpiringAMC' : IDL.Nat,
             'openComplaints' : IDL.Nat,
             'totalSections' : IDL.Nat,
+            'pendingComplaints' : IDL.Nat,
+            'clearedComplaints' : IDL.Nat,
+            'inProgressComplaints' : IDL.Nat,
           }),
         ],
         ['query'],
@@ -495,6 +550,10 @@ export const idlFactory = ({ IDL }) => {
     'updateSection' : IDL.Func([Section], [], []),
     'updateStandbySystem' : IDL.Func([StandbySystem], [], []),
     'updateStockEntry' : IDL.Func([StockEntry], [], []),
+    'createOtherDevice' : IDL.Func([OtherDevice], [], []),
+    'getAllOtherDevices' : IDL.Func([], [IDL.Vec(OtherDevice)], ['query']),
+    'updateOtherDevice' : IDL.Func([OtherDevice], [], []),
+    'deleteOtherDevice' : IDL.Func([IDL.Text], [], []),
   });
 };
 

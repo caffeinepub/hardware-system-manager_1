@@ -1,28 +1,29 @@
 # Hardware System Manager
 
 ## Current State
-- Data Import is a standalone sidebar page (/import route, navItems entry)
-- Standby Systems page has add functionality but no edit or delete buttons per row
-- Layout.tsx navItems includes { path: '/import', label: 'Data Import', icon: Upload }
+OtherDevices import consistently fails. Backend IDL has a mismatch: `idlService` export in `backend.did.js` is missing all OtherDevice CRUD methods (they only exist inside `idlFactory`). Additionally, `getDashboardStats` in both `idlService` and `idlFactory` is missing `pendingComplaints`, `clearedComplaints`, and `inProgressComplaints` fields, so the Candid decoder drops them. The `useActor` hook has no retry logic, so a single failed actor creation leaves the actor permanently null -- causing all pages to show empty data.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Computer Asset Data Import / Export section at the bottom of the Computers page
-- Edit button per row in Standby Systems table
-- Delete button per row in Standby Systems table (with confirmation)
+- Retry logic (3 attempts, 1s delay) to `useActor` hook
+- OtherDevice record type definition at the top level of `backend.did.js` `idlService`
+- OtherDevice CRUD methods (`createOtherDevice`, `getAllOtherDevices`, `updateOtherDevice`, `deleteOtherDevice`) to top-level `idlService` in `backend.did.js`
+- `pendingComplaints`, `clearedComplaints`, `inProgressComplaints` fields to `getDashboardStats` return type in both `idlService` and `idlFactory` in `backend.did.js`
+- Same new fields to `getDashboardStats` in `_SERVICE` interface in `backend.did.d.ts`
+- Retry button on OtherDevices page when loading fails
 
 ### Modify
-- Layout.tsx: remove Data Import from navItems
-- App.tsx: remove importRoute
-- Computers.tsx: append import/export section at the bottom
-- StandbySystems.tsx: add Edit and Delete per row
+- `backend.did.js`: sync `idlService` to include OtherDevice and updated getDashboardStats
+- `backend.did.d.ts`: update `_SERVICE.getDashboardStats` return type
+- `useActor.ts`: add `retry: 3, retryDelay: 1000`
+- `OtherDevices.tsx`: add retry button on load failure; better error messages on import
 
 ### Remove
-- Data Import sidebar nav link
+- Nothing
 
 ## Implementation Plan
-1. Update Layout.tsx: remove Data Import from navItems
-2. Update App.tsx: remove importRoute and DataImport import
-3. Update Computers.tsx: add Computer Asset Data Import / Export section at bottom
-4. Update StandbySystems.tsx: add edit/delete per row with dialog and confirmation
+1. Update `src/frontend/src/declarations/backend.did.js` -- add OtherDevice to `idlService`, add OtherDevice CRUD to `idlService`, update getDashboardStats fields in both `idlService` and `idlFactory`
+2. Update `src/frontend/src/declarations/backend.did.d.ts` -- update `_SERVICE.getDashboardStats` to include new fields
+3. Update `src/frontend/src/hooks/useActor.ts` -- add retry logic
+4. Update `src/frontend/src/pages/OtherDevices.tsx` -- add retry button, improve error display

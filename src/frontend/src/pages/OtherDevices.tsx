@@ -26,7 +26,15 @@ import {
 } from "@/components/ui/table";
 import { useAdmin } from "@/contexts/AdminContext";
 import { useActor } from "@/hooks/useActor";
-import { Download, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import {
+  AlertCircle,
+  Download,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -120,6 +128,7 @@ export default function OtherDevices() {
 
   const [devices, setDevices] = useState<OtherDevice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [backendError, setBackendError] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("All");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -130,22 +139,33 @@ export default function OtherDevices() {
   const importRef = useRef<HTMLInputElement>(null);
 
   const loadDevices = useCallback(async () => {
-    if (!actor) return;
+    setBackendError(false);
+    if (!actor) {
+      setLoading(false);
+      return;
+    }
+    setBackendError(false);
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: backend method
-      const result = await actor.getAllOtherDevices();
+      const result = await (actor as any).getAllOtherDevices();
       setDevices(result as OtherDevice[]);
     } catch (e) {
       console.error(e);
       toast.error("Failed to load devices");
+      setBackendError(true);
     } finally {
       setLoading(false);
     }
   }, [actor]);
 
+  // Re-trigger load when actor first becomes available
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only re-run when actor changes
   useEffect(() => {
-    loadDevices();
-  }, [loadDevices]);
+    if (actor) {
+      setLoading(true);
+      loadDevices();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actor]);
 
   function openAdd() {
     setEditDevice(null);
@@ -181,7 +201,7 @@ export default function OtherDevices() {
       return;
     }
     if (!actor) {
-      toast.error("Not connected. Please log in.");
+      toast.error("Not connected. Please reload the page and try again.");
       return;
     }
     // Check duplicate serial number
@@ -198,8 +218,7 @@ export default function OtherDevices() {
 
     setSaving(true);
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: backend method
-      const a = actor;
+      const a = actor as any;
       if (editDevice) {
         await a.updateOtherDevice({
           ...editDevice,
@@ -248,8 +267,7 @@ export default function OtherDevices() {
     if (!confirm("Delete this device?")) return;
     if (!actor) return;
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: backend method
-      await actor.deleteOtherDevice(id);
+      await (actor as any).deleteOtherDevice(id);
       toast.success("Device deleted");
       await loadDevices();
     } catch (e) {
@@ -329,7 +347,12 @@ export default function OtherDevices() {
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !actor) return;
+    if (!file) return;
+    if (!actor) {
+      toast.error("Not connected. Please reload the page and try again.");
+      if (importRef.current) importRef.current.value = "";
+      return;
+    }
     if (importRef.current) importRef.current.value = "";
 
     setImporting(true);
@@ -341,9 +364,19 @@ export default function OtherDevices() {
         return;
       }
 
-      // biome-ignore lint/suspicious/noExplicitAny: backend method
-      const a = actor;
-      const currentDevices: OtherDevice[] = await a.getAllOtherDevices();
+      const a = actor as any;
+
+      let currentDevices: OtherDevice[];
+      try {
+        currentDevices = await a.getAllOtherDevices();
+      } catch (fetchErr) {
+        console.error("Failed to fetch existing devices:", fetchErr);
+        toast.error(
+          `Import failed: could not fetch existing records. ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+        );
+        return;
+      }
+
       const serialMap = new Map(
         currentDevices.map((d) => [d.serialNumber.trim().toLowerCase(), d]),
       );
@@ -497,6 +530,25 @@ export default function OtherDevices() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Backend connection error */}
+      {!loading && backendError && (
+        <div
+          className="flex items-center gap-2 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm"
+          data-ocid="other-devices.error_state"
+        >
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Unable to connect to backend.</span>
+          <button
+            onClick={() => loadDevices()}
+            className="ml-2 px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
+            type="button"
+            data-ocid="other-devices.secondary_button"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Category sections */}
       {loading ? (
