@@ -55,8 +55,22 @@ import {
   useUpdateStandbySystem,
 } from "../hooks/useQueries";
 
+// Updated status options as requested
+const STANDBY_STATUSES = [
+  { value: "available", label: "Available" },
+  { value: "issueReported", label: "Issue Reported" },
+  { value: "eWaste", label: "e-Waste" },
+  { value: "others", label: "Others" },
+] as const;
+
+type StandbyStatus = (typeof STANDBY_STATUSES)[number]["value"];
+
 const statusLabels: Record<string, string> = {
   available: "Available",
+  issueReported: "Issue Reported",
+  eWaste: "e-Waste",
+  others: "Others",
+  // legacy values kept for display compatibility
   inUse: "In Use",
   retired: "Retired",
 };
@@ -71,6 +85,10 @@ const unitTypeBadge: Record<UnitType, string> = {
 
 const statusBadge: Record<string, string> = {
   available: "bg-green-100 text-green-700 border-green-200",
+  issueReported: "bg-orange-100 text-orange-700 border-orange-200",
+  eWaste: "bg-red-100 text-red-700 border-red-200",
+  others: "bg-muted text-muted-foreground border-border",
+  // legacy
   inUse: "bg-orange-100 text-orange-700 border-orange-200",
   retired: "bg-red-100 text-red-700 border-red-200",
 };
@@ -91,7 +109,7 @@ const emptyForm = () => ({
   model: "",
   brand: "CPU" as UnitType,
   condition: "good" as "good" | "fair" | "poor",
-  status: "available" as "available" | "inUse" | "retired",
+  status: "available" as StandbyStatus,
   assignedSectionId: "",
   notes: "",
 });
@@ -161,7 +179,7 @@ export default function StandbySystems() {
       model: system.model,
       brand: resolveUnitType(system.brand),
       condition: system.condition as "good" | "fair" | "poor",
-      status: system.status as "available" | "inUse" | "retired",
+      status: system.status as StandbyStatus,
       assignedSectionId: system.assignedSectionId ?? "",
       notes: system.notes,
     });
@@ -464,7 +482,7 @@ export default function StandbySystems() {
                 onValueChange={(v) =>
                   setForm((f) => ({
                     ...f,
-                    status: v as "available" | "inUse" | "retired",
+                    status: v as StandbyStatus,
                   }))
                 }
               >
@@ -472,9 +490,11 @@ export default function StandbySystems() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="available">Available</SelectItem>
-                  <SelectItem value="inUse">In Use</SelectItem>
-                  <SelectItem value="retired">Retired</SelectItem>
+                  {STANDBY_STATUSES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
