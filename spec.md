@@ -1,19 +1,31 @@
 # Hardware System Manager
 
 ## Current State
-Backend has Computer CRUD and StandbySystem CRUD as independent operations. Updating a computer's serial number does not automatically sync with Standby Systems.
+Standby Systems page shows: Serial No, Unit Type, Model, Condition, Status, Assigned Section, Notes, Actions. No search or sort controls.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Automatic standby detection logic inside `updateComputer`: when CPU or Monitor serial number changes, auto-move the old (unassigned) serial to Standby, and auto-remove the new serial from Standby if it was there.
+- Search bar to filter by serial number, model, or section
+- Sort by Serial Number (toggle asc/desc)
+- Sl No column (row index)
+- Date Moved to Standby column (from createdAt)
+- Rename columns to: Sl No, Device Type, Serial Number, Make/Model, Previous Section, Date Moved to Standby, Remarks
+- Status indicator badge still shown
 
 ### Modify
-- `updateComputer` in `main.mo`: after detecting a serial change, check if the old serial is still assigned to any other computer; if not, add it to standbySystems as available. Also remove the new serial from standbySystems if present.
+- Column headers renamed as above
+- "Assigned Section" → "Previous Section" (same field `assignedSectionId`)
+- "Notes" → "Remarks"
+- Table order: Sl No, Device Type, Serial Number, Make/Model, Previous Section, Date Moved to Standby, Remarks, Actions
 
 ### Remove
-- Nothing removed.
+- Condition column (merge into tooltip or remove)
+- Status column removed (keep as color badge on Device Type or small indicator)
 
 ## Implementation Plan
-1. Edit `src/backend/main.mo`: modify `updateComputer` to include CPU and Monitor serial change detection with standby sync.
-2. No frontend changes needed for this step -- existing save flows will trigger the logic automatically.
+1. Add search state and filter logic
+2. Add sort-by-serial-number toggle
+3. Update table columns per new layout
+4. Show `createdAt` as "Date Moved to Standby"
+5. Show `assignedSectionId` as "Previous Section"
