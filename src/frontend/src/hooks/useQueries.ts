@@ -346,6 +346,69 @@ export function useDeleteStockEntry() {
   });
 }
 
+// ─── OtherDevices ────────────────────────────────────────────────────────────
+
+export interface OtherDevice {
+  id: string;
+  slNo: bigint;
+  unitArticle: string;
+  makeAndModel: string;
+  serialNumber: string;
+  section: string;
+  ipAddress: string;
+  workingStatus: string;
+  remarks: string;
+  createdAt: bigint;
+}
+
+export function useGetAllOtherDevices() {
+  const { actor, isFetching } = useActor();
+  return useQuery<OtherDevice[]>({
+    queryKey: ["other-devices"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getAllOtherDevices() as Promise<OtherDevice[]>;
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useCreateOtherDevice() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (device: OtherDevice) => {
+      if (!actor) throw new Error("No actor");
+      return (actor as any).createOtherDevice(device);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
+  });
+}
+
+export function useUpdateOtherDevice() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (device: OtherDevice) => {
+      if (!actor) throw new Error("No actor");
+      return (actor as any).updateOtherDevice(device);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
+  });
+}
+
+export function useDeleteOtherDevice() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => {
+      if (!actor) throw new Error("No actor");
+      return (actor as any).deleteOtherDevice(id);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
+  });
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export function useGetDashboardStats() {

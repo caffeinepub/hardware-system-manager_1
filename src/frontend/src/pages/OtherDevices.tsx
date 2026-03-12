@@ -27,6 +27,14 @@ import {
 import { useAdmin } from "@/contexts/AdminContext";
 import { useActor } from "@/hooks/useActor";
 import {
+  useCreateOtherDevice,
+  useDeleteOtherDevice,
+  useGetAllOtherDevices,
+  useUpdateOtherDevice,
+} from "@/hooks/useQueries";
+import type { OtherDevice } from "@/hooks/useQueries";
+import { useQueryClient } from "@tanstack/react-query";
+import {
   AlertCircle,
   Download,
   Pencil,
@@ -35,7 +43,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 const UNIT_ARTICLES = [
@@ -53,19 +61,6 @@ const UNIT_ARTICLES = [
 type UnitArticle = (typeof UNIT_ARTICLES)[number];
 
 const WORKING_STATUSES = ["Working", "Not Working", "Under Repair"] as const;
-
-interface OtherDevice {
-  id: string;
-  slNo: bigint;
-  unitArticle: string;
-  makeAndModel: string;
-  serialNumber: string;
-  section: string;
-  ipAddress: string;
-  workingStatus: string;
-  remarks: string;
-  createdAt: bigint;
-}
 
 const emptyForm = {
   unitArticle: "" as string,
@@ -125,10 +120,18 @@ export default function OtherDevices() {
   const { isLoggedIn, isAdmin, isAuthorized } = useAdmin();
   const canEdit = isLoggedIn && (isAdmin || isAuthorized);
   const { actor } = useActor();
+  const queryClient = useQueryClient();
 
-  const [devices, setDevices] = useState<OtherDevice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [backendError, setBackendError] = useState(false);
+  const {
+    data: devices = [],
+    isLoading: loading,
+    isError: backendError,
+    refetch,
+  } = useGetAllOtherDevices();
+  const createDevice = useCreateOtherDevice();
+  const updateDevice = useUpdateOtherDevice();
+  const deleteDeviceMutation = useDeleteOtherDevice();
+
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("All");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -137,35 +140,6 @@ export default function OtherDevices() {
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
-
-  const loadDevices = useCallback(async () => {
-    setBackendError(false);
-    if (!actor) {
-      setLoading(false);
-      return;
-    }
-    setBackendError(false);
-    try {
-      const result = await (actor as any).getAllOtherDevices();
-      setDevices(result as OtherDevice[]);
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to load devices");
-      setBackendError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [actor]);
-
-  // Re-trigger load when actor first becomes available
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only re-run when actor changes
-  useEffect(() => {
-    if (actor) {
-      setLoading(true);
-      loadDevices();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actor]);
 
   function openAdd() {
     setEditDevice(null);
@@ -200,10 +174,6 @@ export default function OtherDevices() {
       toast.error("Serial Number is required");
       return;
     }
-    if (!actor) {
-      toast.error("Not connected. Please reload the page and try again.");
-      return;
-    }
     // Check duplicate serial number
     const duplicate = devices.find(
       (d) =>
@@ -218,9 +188,8 @@ export default function OtherDevices() {
 
     setSaving(true);
     try {
-      const a = actor as any;
       if (editDevice) {
-        await a.updateOtherDevice({
+        await updateDevice.mutateAsync({
           ...editDevice,
           unitArticle: form.unitArticle,
           makeAndModel: form.makeAndModel,
@@ -248,11 +217,10 @@ export default function OtherDevices() {
           remarks: form.remarks,
           createdAt: BigInt(Date.now()) * BigInt(1_000_000),
         };
-        await a.createOtherDevice(newDevice);
+        await createDevice.mutateAsync(newDevice);
         toast.success("Device added successfully");
       }
       setDialogOpen(false);
-      await loadDevices();
     } catch (e) {
       console.error(e);
       toast.error(
@@ -265,11 +233,9 @@ export default function OtherDevices() {
 
   async function deleteDevice(id: string) {
     if (!confirm("Delete this device?")) return;
-    if (!actor) return;
     try {
-      await (actor as any).deleteOtherDevice(id);
+      await deleteDeviceMutation.mutateAsync(id);
       toast.success("Device deleted");
-      await loadDevices();
     } catch (e) {
       console.error(e);
       toast.error("Failed to delete device");
@@ -446,7 +412,7 @@ export default function OtherDevices() {
         }
       }
 
-      await loadDevices();
+      await queryClient.invalidateQueries({ queryKey: ["other-devices"] });
       toast.success(
         `Import complete: ${added} added, ${updated} updated${
           errors > 0 ? `, ${errors} skipped (missing data)` : ""
@@ -540,7 +506,7 @@ export default function OtherDevices() {
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>Unable to connect to backend.</span>
           <button
-            onClick={() => loadDevices()}
+            onClick={() => refetch()}
             className="ml-2 px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
             type="button"
             data-ocid="other-devices.secondary_button"
