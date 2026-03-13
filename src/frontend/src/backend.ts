@@ -142,6 +142,18 @@ export interface OtherDevice {
     remarks: string;
     createdAt: bigint;
 }
+export interface MovementLog {
+    id: string;
+    dateTime: bigint;
+    deviceType: string;
+    serialNumber: string;
+    action: string;
+    previousSection: string;
+    newSection: string;
+    triggeredFrom: string;
+    user: string;
+    remarks: string;
+}
 export interface ProcessStockEntriesResult {
     updated: bigint;
     addedToStandby: bigint;
@@ -295,6 +307,8 @@ export interface backendInterface {
     getAllOtherDevices(): Promise<Array<OtherDevice>>;
     updateOtherDevice(device: OtherDevice): Promise<void>;
     deleteOtherDevice(id: string): Promise<void>;
+    createMovementLog(log: MovementLog): Promise<void>;
+    getAllMovementLogs(): Promise<Array<MovementLog>>;
 }
 import type { AMCPart as _AMCPart, Complaint as _Complaint, ComplaintStatus as _ComplaintStatus, Computer as _Computer, ExternalBlob as _ExternalBlob, Priority as _Priority, Section as _Section, StandbySystem as _StandbySystem, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -1028,6 +1042,18 @@ export class Backend implements backendInterface {
             try { return await (this.actor as any).deleteOtherDevice(id); }
             catch (e) { this.processError(e); throw new Error("unreachable"); }
         } else { return await (this.actor as any).deleteOtherDevice(id); }
+    }
+    async createMovementLog(arg0: MovementLog): Promise<void> {
+        if (this.processError) {
+            try { return await (this.actor as any).createMovementLog(arg0); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).createMovementLog(arg0); }
+    }
+    async getAllMovementLogs(): Promise<Array<MovementLog>> {
+        if (this.processError) {
+            try { return await (this.actor as any).getAllMovementLogs(); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).getAllMovementLogs(); }
     }
 }
 function from_candid_AMCPart_n27(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _AMCPart): AMCPart {

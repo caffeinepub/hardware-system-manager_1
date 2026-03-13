@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Database,
+  History,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -28,6 +29,7 @@ const navItems = [
   { path: "/complaints", label: "Complaint Log", icon: AlertTriangle },
   { path: "/other-devices", label: "Other Devices", icon: Package },
   { path: "/stock", label: "Stock Data", icon: Database },
+  { path: "/movement", label: "Movement History", icon: History },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

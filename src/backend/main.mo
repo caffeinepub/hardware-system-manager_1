@@ -123,6 +123,19 @@ actor {
     createdAt : Int;
   };
 
+  type MovementLog = {
+    id : Text;
+    dateTime : Int;
+    deviceType : Text;  // "CPU" | "Monitor"
+    serialNumber : Text;
+    action : Text;      // "assigned" | "removed" | "movedToStandby" | "assignedFromStandby" | "replaced" | "sectionTransfer"
+    previousSection : Text;
+    newSection : Text;
+    triggeredFrom : Text; // "Computers Page" | "Standby Systems Page" | "Data Import"
+    user : Text;
+    remarks : Text;
+  };
+
   type ProcessStockEntriesResult = {
     updated : Nat;
     addedToStandby : Nat;
@@ -137,6 +150,7 @@ actor {
   stable var stockEntriesStable   : [(Text, StockEntry)]    = [];
   stable var userProfilesStable   : [(Principal, UserProfile)] = [];
   stable var otherDevicesStable   : [(Text, OtherDevice)]   = [];
+  stable var movementLogsStable   : [(Text, MovementLog)]   = [];
 
   // ── In-memory maps ────────────────────────────────────────────────────────
   let sections      = Map.fromIter<Text, Section>(sectionsStable.vals());
@@ -147,6 +161,7 @@ actor {
   let stockEntries  = Map.fromIter<Text, StockEntry>(stockEntriesStable.vals());
   let userProfiles  = Map.fromIter<Principal, UserProfile>(userProfilesStable.vals());
   let otherDevices  = Map.fromIter<Text, OtherDevice>(otherDevicesStable.vals());
+  let movementLogs  = Map.fromIter<Text, MovementLog>(movementLogsStable.vals());
 
   // ── Upgrade hooks ─────────────────────────────────────────────────────────
   system func preupgrade() {
@@ -158,6 +173,7 @@ actor {
     stockEntriesStable := stockEntries.entries().toArray();
     userProfilesStable := userProfiles.entries().toArray();
     otherDevicesStable := otherDevices.entries().toArray();
+    movementLogsStable := movementLogs.entries().toArray();
   };
 
   system func postupgrade() {
@@ -169,6 +185,34 @@ actor {
     stockEntriesStable := [];
     userProfilesStable := [];
     otherDevicesStable := [];
+    movementLogsStable := [];
+  };
+
+  // ── Helper: add movement log entry ────────────────────────────────────────
+  func addMovementLog(
+    deviceType : Text,
+    serialNumber : Text,
+    action : Text,
+    previousSection : Text,
+    newSection : Text,
+    triggeredFrom : Text,
+    user : Text,
+    remarks : Text,
+  ) {
+    let id = serialNumber # "_" # action # "_" # Time.now().toText();
+    let entry : MovementLog = {
+      id;
+      dateTime = Time.now();
+      deviceType;
+      serialNumber;
+      action;
+      previousSection;
+      newSection;
+      triggeredFrom;
+      user;
+      remarks;
+    };
+    movementLogs.add(id, entry);
   };
 
   // Section CRUD
@@ -227,7 +271,7 @@ actor {
     switch (computers.get(computer.id)) {
       case (null) {};
       case (?old) {
-        // CPU serial changed: auto-move old serial to standby if no longer in use
+        // CPU serial changed
         if (old.serialNumber != "" and old.serialNumber != computer.serialNumber) {
           let cpuInUse = computers.values().toArray().find(func(c) {
             c.id != computer.id and c.serialNumber == old.serialNumber
@@ -251,21 +295,36 @@ actor {
                     createdAt = Time.now();
                   };
                   standbySystems.add(newStandby.id, newStandby);
+                  addMovementLog("CPU", old.serialNumber, "movedToStandby", old.sectionId, "Standby", "Computers Page", "", "Auto-moved on CPU replacement");
                 };
                 case (?_) {};
               };
             };
             case (?_) {};
           };
+          // Log removal of old CPU from seat
+          addMovementLog("CPU", old.serialNumber, "removed", old.sectionId, "", "Computers Page", "", "Replaced by " # computer.serialNumber);
         };
         // Remove new CPU serial from standby if present
         if (computer.serialNumber != "") {
           switch (standbySystems.values().toArray().find(func(s) { s.serialNumber == computer.serialNumber })) {
             case (null) {};
-            case (?s) { standbySystems.remove(s.id) };
+            case (?s) {
+              standbySystems.remove(s.id);
+              addMovementLog("CPU", computer.serialNumber, "assignedFromStandby", "Standby", computer.sectionId, "Computers Page", "", "Assigned to seat " # computer.seatNumber);
+            };
           };
         };
-        // Monitor serial changed: auto-move old monitor serial to standby if no longer in use
+        // Log new CPU assignment if serial changed
+        if (old.serialNumber != computer.serialNumber and computer.serialNumber != "") {
+          addMovementLog("CPU", computer.serialNumber, "assigned", old.sectionId, computer.sectionId, "Computers Page", "", "Assigned to seat " # computer.seatNumber);
+        };
+        // Section transfer (same serial, different section)
+        if (old.serialNumber != "" and old.serialNumber == computer.serialNumber and old.sectionId != computer.sectionId) {
+          addMovementLog("CPU", computer.serialNumber, "sectionTransfer", old.sectionId, computer.sectionId, "Computers Page", "", "");
+        };
+
+        // Monitor serial changed
         if (old.monitorSerial != "" and old.monitorSerial != computer.monitorSerial) {
           let monInUse = computers.values().toArray().find(func(c) {
             c.id != computer.id and c.monitorSerial == old.monitorSerial
@@ -289,20 +348,32 @@ actor {
                     createdAt = Time.now();
                   };
                   standbySystems.add(newMonStandby.id, newMonStandby);
+                  addMovementLog("Monitor", old.monitorSerial, "movedToStandby", old.sectionId, "Standby", "Computers Page", "", "Auto-moved on monitor replacement");
                 };
                 case (?_) {};
               };
             };
             case (?_) {};
           };
+          addMovementLog("Monitor", old.monitorSerial, "removed", old.sectionId, "", "Computers Page", "", "Replaced by " # computer.monitorSerial);
         };
         // Remove new monitor serial from standby if present
         if (computer.monitorSerial != "") {
           switch (standbySystems.values().toArray().find(func(s) { s.serialNumber == computer.monitorSerial })) {
             case (null) {};
-            case (?s) { standbySystems.remove(s.id) };
+            case (?s) {
+              standbySystems.remove(s.id);
+              addMovementLog("Monitor", computer.monitorSerial, "assignedFromStandby", "Standby", computer.sectionId, "Computers Page", "", "Assigned to seat " # computer.seatNumber);
+            };
           };
         };
+        if (old.monitorSerial != computer.monitorSerial and computer.monitorSerial != "") {
+          addMovementLog("Monitor", computer.monitorSerial, "assigned", old.sectionId, computer.sectionId, "Computers Page", "", "Assigned to seat " # computer.seatNumber);
+        };
+        if (old.monitorSerial != "" and old.monitorSerial == computer.monitorSerial and old.sectionId != computer.sectionId) {
+          addMovementLog("Monitor", computer.monitorSerial, "sectionTransfer", old.sectionId, computer.sectionId, "Computers Page", "", "");
+        };
+
         computers.add(computer.id, computer);
       };
     };
@@ -557,6 +628,19 @@ actor {
       case (null) {};
       case (?_) { otherDevices.remove(id) };
     };
+  };
+
+  // MovementLog
+  public shared func createMovementLog(log : MovementLog) : async () {
+    movementLogs.add(log.id, log);
+  };
+
+  public query func getAllMovementLogs() : async [MovementLog] {
+    movementLogs.values().toArray().sort(
+      func(a, b) {
+        if (a.dateTime > b.dateTime) { #less } else if (a.dateTime < b.dateTime) { #greater } else { #equal };
+      }
+    );
   };
 
   // Dashboard Stats

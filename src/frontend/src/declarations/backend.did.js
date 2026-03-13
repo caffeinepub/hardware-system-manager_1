@@ -138,6 +138,19 @@ export const ProcessStockEntriesResult = IDL.Record({
   'addedToStandby' : IDL.Nat,
 });
 
+
+export const MovementLog = IDL.Record({
+  'id': IDL.Text,
+  'dateTime': IDL.Int,
+  'deviceType': IDL.Text,
+  'serialNumber': IDL.Text,
+  'action': IDL.Text,
+  'previousSection': IDL.Text,
+  'newSection': IDL.Text,
+  'triggeredFrom': IDL.Text,
+  'user': IDL.Text,
+  'remarks': IDL.Text,
+});
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
       [IDL.Vec(IDL.Nat8)],
@@ -252,6 +265,8 @@ export const idlService = IDL.Service({
   'updateSection' : IDL.Func([Section], [], []),
   'updateStandbySystem' : IDL.Func([StandbySystem], [], []),
   'updateStockEntry' : IDL.Func([StockEntry], [], []),
+  'createMovementLog' : IDL.Func([MovementLog], [], []),
+  'getAllMovementLogs' : IDL.Func([], [IDL.Vec(MovementLog)], ['query']),
   'createOtherDevice' : IDL.Func([IDL.Record({
     'id' : IDL.Text,
     'slNo' : IDL.Nat,
@@ -423,6 +438,18 @@ export const idlFactory = ({ IDL }) => {
     'updated' : IDL.Nat,
     'addedToStandby' : IDL.Nat,
   });
+  const MovementLog = IDL.Record({
+    'id': IDL.Text,
+    'dateTime': IDL.Int,
+    'deviceType': IDL.Text,
+    'serialNumber': IDL.Text,
+    'action': IDL.Text,
+    'previousSection': IDL.Text,
+    'newSection': IDL.Text,
+    'triggeredFrom': IDL.Text,
+    'user': IDL.Text,
+    'remarks': IDL.Text,
+  });
   const OtherDevice = IDL.Record({
     'id' : IDL.Text,
     'slNo' : IDL.Nat,
@@ -550,6 +577,8 @@ export const idlFactory = ({ IDL }) => {
     'updateSection' : IDL.Func([Section], [], []),
     'updateStandbySystem' : IDL.Func([StandbySystem], [], []),
     'updateStockEntry' : IDL.Func([StockEntry], [], []),
+    'createMovementLog' : IDL.Func([MovementLog], [], []),
+    'getAllMovementLogs' : IDL.Func([], [IDL.Vec(MovementLog)], ['query']),
     'createOtherDevice' : IDL.Func([OtherDevice], [], []),
     'getAllOtherDevices' : IDL.Func([], [IDL.Vec(OtherDevice)], ['query']),
     'updateOtherDevice' : IDL.Func([OtherDevice], [], []),

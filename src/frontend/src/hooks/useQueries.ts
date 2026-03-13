@@ -436,3 +436,17 @@ export function useIsCallerAdmin() {
     enabled: !!actor && !isFetching,
   });
 }
+
+// ─── Movement Logs ───────────────────────────────────────────────────────────
+
+export function useGetAllMovementLogs() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["movement-logs"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getAllMovementLogs() as Promise<any[]>;
+    },
+    enabled: !!actor && !isFetching,
+  });
+}

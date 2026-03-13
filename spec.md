@@ -1,22 +1,30 @@
 # Hardware System Manager
 
 ## Current State
-The app has an `AdminContext` with `isLoggedIn` (true when role is 'admin' or 'user'). All routes render freely regardless of auth state -- unauthenticated visitors can see Dashboard, Computers, Standby, Complaints, Other Devices, and Stock Data pages.
-
-Public routes: `/admin` (AdminLogin), `/login` (UserLogin).
+The app has Computers, Standby Systems, Other Devices, Complaint Log, and Stock Data pages. The backend tracks all hardware but does not log movement events. The frontend has no Hardware Movement History page.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `ProtectedRoute` wrapper component that reads `isLoggedIn` from `AdminContext`. If false, immediately redirects to `/login`.
+- `MovementLog` type in backend with fields: id, dateTime, deviceType (CPU/Monitor), serialNumber, action (assigned/removed/movedToStandby/assignedFromStandby/replaced/sectionTransfer), previousSection, newSection, triggeredFrom, user, remarks
+- `movementLogsStable` stable var + map in backend
+- `createMovementLog` and `getAllMovementLogs` backend methods
+- Auto-logging inside `updateComputer`: when CPU serial changes, log Removed+Moved to Standby for old serial and Assigned to Seat for new; same for monitor serial
+- `MovementHistory.tsx` frontend page: read-only log table, color-coded action badges, filters (device type, serial, section, action, date range), global search, CSV export
+- Route `/movement` in App.tsx
+- Nav item "Movement History" in Layout.tsx
 
 ### Modify
-- `App.tsx`: wrap all data pages (index `/`, `/computers`, `/standby`, `/complaints`, `/stock`, `/other-devices`) with `ProtectedRoute`. Leave `/admin` and `/login` unprotected.
+- `updateComputer` Motoko method: emit movement logs alongside existing standby auto-detection logic
+- `preupgrade`/`postupgrade` hooks: include movementLogsStable
+- Layout.tsx navItems: add Movement History entry
+- App.tsx: add movementRoute and register in router
 
 ### Remove
-- Nothing removed.
+- Nothing removed
 
 ## Implementation Plan
-1. Create `src/frontend/src/components/ProtectedRoute.tsx` -- reads `isLoggedIn`, if false renders `<Navigate to="/login" />`, otherwise renders `<Outlet />`.
-2. In `App.tsx`, add a protected layout route as a parent of all data routes using `ProtectedRoute` as its component.
-3. `/admin` and `/login` remain as direct children of rootRoute (unprotected).
+1. Update backend main.mo: add MovementLog type, stable storage, CRUD methods, auto-log in updateComputer
+2. Create frontend MovementHistory.tsx page with table, filters, search, CSV export
+3. Update App.tsx to register /movement route
+4. Update Layout.tsx to add nav item

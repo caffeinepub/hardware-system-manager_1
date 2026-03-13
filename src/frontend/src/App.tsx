@@ -15,6 +15,7 @@ import Complaints from "./pages/Complaints";
 import Computers from "./pages/Computers";
 // Pages
 import Dashboard from "./pages/Dashboard";
+import MovementHistory from "./pages/MovementHistory";
 import OtherDevices from "./pages/OtherDevices";
 import StandbySystems from "./pages/StandbySystems";
 import StockData from "./pages/StockData";
@@ -75,6 +76,12 @@ const otherDevicesRoute = createRoute({
   component: OtherDevices,
 });
 
+const movementRoute = createRoute({
+  getParentRoute: () => protectedLayout,
+  path: "/movement",
+  component: MovementHistory,
+});
+
 // Public routes remain as direct children of rootRoute
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -96,6 +103,7 @@ const routeTree = rootRoute.addChildren([
     complaintsRoute,
     stockRoute,
     otherDevicesRoute,
+    movementRoute,
   ]),
   adminRoute,
   userLoginRoute,
