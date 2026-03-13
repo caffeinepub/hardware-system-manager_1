@@ -42,9 +42,9 @@ import { Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { StandbySystem } from "../backend";
-import type {
+import {
   Variant_available_inUse_retired,
-  Variant_fair_good_poor,
+  type Variant_fair_good_poor,
 } from "../backend";
 import { useAdmin } from "../contexts/AdminContext";
 import {
@@ -55,7 +55,7 @@ import {
   useUpdateStandbySystem,
 } from "../hooks/useQueries";
 
-// Updated status options as requested
+// Updated status options
 const STANDBY_STATUSES = [
   { value: "available", label: "Available" },
   { value: "issueReported", label: "Issue Reported" },
@@ -70,9 +70,6 @@ const statusLabels: Record<string, string> = {
   issueReported: "Issue Reported",
   eWaste: "e-Waste",
   others: "Others",
-  // legacy values kept for display compatibility
-  inUse: "In Use",
-  retired: "Retired",
 };
 
 type UnitType = "CPU" | "Monitor" | "Other";
@@ -88,10 +85,66 @@ const statusBadge: Record<string, string> = {
   issueReported: "bg-orange-100 text-orange-700 border-orange-200",
   eWaste: "bg-red-100 text-red-700 border-red-200",
   others: "bg-muted text-muted-foreground border-border",
-  // legacy
-  inUse: "bg-orange-100 text-orange-700 border-orange-200",
-  retired: "bg-red-100 text-red-700 border-red-200",
 };
+
+// The backend Candid only supports available | inUse | retired.
+// We encode the extended status (issueReported, eWaste, others) as a
+// hidden prefix in the notes field: "__ST:issueReported|user remarks"
+// This keeps all data in existing fields without backend changes.
+const ST_PREFIX = "__ST:";
+const ST_SEP = "|";
+
+function encodeStatusForBackend(
+  status: StandbyStatus,
+  notes: string,
+): { backendStatus: Variant_available_inUse_retired; encodedNotes: string } {
+  // Strip any existing status prefix from notes
+  const cleanNotes = notes.replace(new RegExp(`^${ST_PREFIX}[^|]*\\|`), "");
+
+  if (status === "available") {
+    return {
+      backendStatus: Variant_available_inUse_retired.available,
+      encodedNotes: cleanNotes,
+    };
+  }
+  if (status === "eWaste") {
+    return {
+      backendStatus: Variant_available_inUse_retired.retired,
+      encodedNotes: `${ST_PREFIX}eWaste${ST_SEP}${cleanNotes}`,
+    };
+  }
+  // issueReported and others both map to inUse
+  return {
+    backendStatus: Variant_available_inUse_retired.inUse,
+    encodedNotes: `${ST_PREFIX}${status}${ST_SEP}${cleanNotes}`,
+  };
+}
+
+function decodeStatusFromRecord(
+  backendStatus: string,
+  notes: string,
+): { displayStatus: StandbyStatus; displayNotes: string } {
+  // Check for encoded prefix
+  const match = notes.match(new RegExp(`^${ST_PREFIX}([^|]*)\\|(.*)$`, "s"));
+  if (match) {
+    const decoded = match[1] as StandbyStatus;
+    const validStatuses: string[] = STANDBY_STATUSES.map((s) => s.value);
+    return {
+      displayStatus: validStatuses.includes(decoded)
+        ? decoded
+        : "issueReported",
+      displayNotes: match[2],
+    };
+  }
+  // Legacy mapping for records saved before this encoding scheme
+  if (backendStatus === "inUse") {
+    return { displayStatus: "issueReported", displayNotes: notes };
+  }
+  if (backendStatus === "retired") {
+    return { displayStatus: "eWaste", displayNotes: notes };
+  }
+  return { displayStatus: "available", displayNotes: notes };
+}
 
 function formatDate(ts: bigint | number | undefined): string {
   if (!ts) return "—";
@@ -174,14 +227,18 @@ export default function StandbySystems() {
 
   const openEdit = (system: StandbySystem) => {
     setEditingSystem(system);
+    const { displayStatus, displayNotes } = decodeStatusFromRecord(
+      system.status as string,
+      system.notes,
+    );
     setForm({
       serialNumber: system.serialNumber,
       model: system.model,
       brand: resolveUnitType(system.brand),
       condition: system.condition as "good" | "fair" | "poor",
-      status: system.status as StandbyStatus,
+      status: displayStatus,
       assignedSectionId: system.assignedSectionId ?? "",
-      notes: system.notes,
+      notes: displayNotes,
     });
     setDialogOpen(true);
   };
@@ -196,15 +253,19 @@ export default function StandbySystems() {
       toast.error("Serial number, model, and unit type are required");
       return;
     }
+    const { backendStatus, encodedNotes } = encodeStatusForBackend(
+      form.status,
+      form.notes,
+    );
     const data: StandbySystem = {
       id: editingSystem?.id ?? crypto.randomUUID(),
       serialNumber: form.serialNumber,
       model: form.model,
       brand: form.brand,
       condition: form.condition as Variant_fair_good_poor,
-      status: form.status as Variant_available_inUse_retired,
+      status: backendStatus,
       assignedSectionId: form.assignedSectionId || undefined,
-      notes: form.notes,
+      notes: encodedNotes,
       createdAt: editingSystem?.createdAt ?? BigInt(Date.now()),
     };
     try {
@@ -343,6 +404,11 @@ export default function StandbySystems() {
               <TableBody>
                 {filteredSystems.map((system, idx) => {
                   const ut = resolveUnitType(system.brand);
+                  const { displayStatus, displayNotes } =
+                    decodeStatusFromRecord(
+                      system.status as string,
+                      system.notes,
+                    );
                   return (
                     <TableRow
                       key={system.id}
@@ -378,15 +444,15 @@ export default function StandbySystems() {
                         <span
                           className={cn(
                             "text-xs font-medium px-2 py-0.5 rounded-full border",
-                            statusBadge[system.status] ??
+                            statusBadge[displayStatus] ??
                               "bg-muted text-muted-foreground border-border",
                           )}
                         >
-                          {statusLabels[system.status] ?? system.status}
+                          {statusLabels[displayStatus] ?? displayStatus}
                         </span>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">
-                        {system.notes || "—"}
+                        {displayNotes || "—"}
                       </TableCell>
                       {isLoggedIn && (
                         <TableCell className="text-right">

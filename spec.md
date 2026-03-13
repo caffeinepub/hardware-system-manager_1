@@ -1,29 +1,22 @@
 # Hardware System Manager
 
 ## Current State
-Other Devices page (OtherDevices.tsx) directly calls backend actor methods using `actor as any` without React Query hooks. All other pages (Computers, Standby, Complaints, Stock) use structured hooks in useQueries.ts. This mismatch causes:
-- Data not appearing after import (no proper cache invalidation)
-- Import failures due to no retry/error recovery
-- No type safety on backend calls
-No OtherDevice hooks exist in useQueries.ts.
+The app has an `AdminContext` with `isLoggedIn` (true when role is 'admin' or 'user'). All routes render freely regardless of auth state -- unauthenticated visitors can see Dashboard, Computers, Standby, Complaints, Other Devices, and Stock Data pages.
+
+Public routes: `/admin` (AdminLogin), `/login` (UserLogin).
 
 ## Requested Changes (Diff)
 
 ### Add
-- `useGetAllOtherDevices`, `useCreateOtherDevice`, `useUpdateOtherDevice`, `useDeleteOtherDevice` hooks in useQueries.ts (same pattern as Standby/Computers hooks)
+- `ProtectedRoute` wrapper component that reads `isLoggedIn` from `AdminContext`. If false, immediately redirects to `/login`.
 
 ### Modify
-- OtherDevices.tsx: replace direct `actor as any` calls with the new React Query hooks
-- Import logic: use the query cache (invalidate after each createOtherDevice/updateOtherDevice) so data refreshes automatically
-- Export logic: use the `data` from the React Query hook (already filtered to OtherDevices only)
+- `App.tsx`: wrap all data pages (index `/`, `/computers`, `/standby`, `/complaints`, `/stock`, `/other-devices`) with `ProtectedRoute`. Leave `/admin` and `/login` unprotected.
 
 ### Remove
-- Direct `useActor` calls and manual `loadDevices` state management in OtherDevices.tsx
-- Manual `loading` / `backendError` state that bypassed React Query
+- Nothing removed.
 
 ## Implementation Plan
-1. Add OtherDevice type import to useQueries.ts
-2. Add four hooks: useGetAllOtherDevices, useCreateOtherDevice, useUpdateOtherDevice, useDeleteOtherDevice
-3. Refactor OtherDevices.tsx to use these hooks (useGetAllOtherDevices for data, mutations for saves/deletes)
-4. Fix import function to call mutations and invalidate query after each row
-5. Validate and deploy
+1. Create `src/frontend/src/components/ProtectedRoute.tsx` -- reads `isLoggedIn`, if false renders `<Navigate to="/login" />`, otherwise renders `<Outlet />`.
+2. In `App.tsx`, add a protected layout route as a parent of all data routes using `ProtectedRoute` as its component.
+3. `/admin` and `/login` remain as direct children of rootRoute (unprotected).
