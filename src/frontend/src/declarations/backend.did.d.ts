@@ -139,6 +139,58 @@ export interface OtherDevice {
   'remarks' : string,
   'createdAt' : bigint,
 }
+export interface Device {
+  'id': string,
+  'serialNumber': string,
+  'deviceType': string,
+  'makeAndModel': string,
+  'companyName': string,
+  'amcTeam': string,
+  'amcStartDate': bigint,
+  'amcExpiryDate': bigint,
+  'assignedSeatId': string,
+  'sectionId': string,
+  'workingStatus': string,
+  'ipAddress': string,
+  'remarks': string,
+  'previousSection': string,
+  'dateMovedToStandby': bigint,
+  'createdAt': bigint,
+}
+export interface Seat {
+  'id': string,
+  'sectionId': string,
+  'seatNumber': string,
+  'currentUser': string,
+  'cpuSerial': string,
+  'monitorSerial': string,
+  'ip1': string,
+  'ip2': string,
+  'remarks': string,
+  'createdAt': bigint,
+}
+
+export interface MovementLog {
+  'id': string;
+  'dateTime': bigint;
+  'deviceType': string;
+  'serialNumber': string;
+  'action': string;
+  'previousSection': string;
+  'newSection': string;
+  'triggeredFrom': string;
+  'user': string;
+  'remarks': string;
+}
+export interface StockImportRow {
+  'slNo': bigint;
+  'companyAndModel': string;
+  'cpuSlNo': string;
+  'monitorSlNo': string;
+  'amcStartDate': bigint;
+  'amcExpiryDate': bigint;
+  'amcTeam': string;
+}
 export interface _SERVICE {
   '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
   '_caffeineStorageBlobsToDelete' : ActorMethod<[], Array<Uint8Array>>,
@@ -192,14 +244,12 @@ export interface _SERVICE {
   'getDashboardStats' : ActorMethod<
     [],
     {
-      'totalStandbySystems' : bigint,
-      'totalComputers' : bigint,
-      'computersWithExpiringAMC' : bigint,
-      'openComplaints' : bigint,
-      'totalSections' : bigint,
+      'totalSeats' : bigint,
+      'totalStandbyDevices' : bigint,
       'pendingComplaints' : bigint,
       'clearedComplaints' : bigint,
-      'inProgressComplaints' : bigint,
+      'totalOtherDevices' : bigint,
+      'totalDevices' : bigint,
     }
   >,
   'getExpiringAMCParts' : ActorMethod<[bigint], Array<AMCPart>>,
@@ -215,6 +265,20 @@ export interface _SERVICE {
   'updateSection' : ActorMethod<[Section], undefined>,
   'updateStandbySystem' : ActorMethod<[StandbySystem], undefined>,
   'updateStockEntry' : ActorMethod<[StockEntry], undefined>,
+  'createDevice': ActorMethod<[Device], undefined>,
+  'getDevice': ActorMethod<[string], [] | [Device]>,
+  'getAllDevices': ActorMethod<[], Array<Device>>,
+  'updateDevice': ActorMethod<[Device], undefined>,
+  'deleteDevice': ActorMethod<[string], undefined>,
+  'createSeat': ActorMethod<[Seat], undefined>,
+  'getSeat': ActorMethod<[string], [] | [Seat]>,
+  'getAllSeats': ActorMethod<[], Array<Seat>>,
+  'updateSeat': ActorMethod<[Seat], undefined>,
+  'deleteSeat': ActorMethod<[string], undefined>,
+  'createMovementLog': ActorMethod<[MovementLog], undefined>,
+  'getAllMovementLogs': ActorMethod<[], Array<MovementLog>>,
+  'importStockRow': ActorMethod<[StockImportRow], undefined>,
+  'clearAllData': ActorMethod<[], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

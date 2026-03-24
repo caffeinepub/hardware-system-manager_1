@@ -10,19 +10,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  AlertCircle,
-  KeyRound,
-  Loader2,
-  LogIn,
-  Mail,
-  ShieldCheck,
-} from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertCircle, KeyRound, Loader2, LogIn, Mail } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useAdmin } from "../contexts/AdminContext";
-import { ICP_IDENTITY_MARKER } from "../contexts/AdminContext";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 const USER_EMAIL = "anandsreedharamhome@gmail.com";
 const USER_PASSKEY = "Mainuser123";
@@ -30,46 +21,11 @@ const USER_PASSKEY = "Mainuser123";
 export default function UserLogin() {
   const navigate = useNavigate();
   const { isLoggedIn, login } = useAdmin();
-  const {
-    login: iiLogin,
-    clear,
-    isLoggingIn,
-    isLoginSuccess,
-    isLoginError,
-    loginError,
-    identity,
-  } = useInternetIdentity();
 
   const [email, setEmail] = useState("");
   const [passkey, setPasskey] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [navigating, setNavigating] = useState(false);
-
-  // Handle ICP Internet Identity login success
-  useEffect(() => {
-    if (isLoginSuccess && identity) {
-      const principal = identity.getPrincipal();
-      // Only proceed if the principal is non-anonymous
-      if (!principal.isAnonymous()) {
-        login("user", "ii-identity", ICP_IDENTITY_MARKER);
-        toast.success("Welcome! You are logged in via Internet Identity.");
-        void navigate({ to: "/" });
-      } else {
-        // Anonymous principal means login didn't produce a real identity
-        clear();
-        toast.error(
-          "Internet Identity login returned an anonymous principal. Please try again.",
-        );
-      }
-    }
-  }, [isLoginSuccess, identity, login, navigate, clear]);
-
-  // Show error from ICP login
-  useEffect(() => {
-    if (isLoginError && loginError) {
-      toast.error(`Internet Identity login failed: ${loginError.message}`);
-    }
-  }, [isLoginError, loginError]);
 
   if (isLoggedIn) {
     void navigate({ to: "/" });
@@ -181,39 +137,6 @@ export default function UserLogin() {
                 {navigating ? "Logging in..." : "Login"}
               </Button>
             </form>
-
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-
-            {/* ICP Internet Identity Login */}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full gap-2"
-              size="lg"
-              onClick={iiLogin}
-              disabled={isLoggingIn || navigating}
-              data-ocid="userlogin.icp_identity_button"
-            >
-              {isLoggingIn ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <ShieldCheck className="w-4 h-4" />
-              )}
-              {isLoggingIn ? "Connecting..." : "Login with Internet Identity"}
-            </Button>
-
-            <p className="text-center text-xs text-muted-foreground mt-3">
-              Internet Identity uses your device passkey or biometrics for
-              secure, non-anonymous login.
-            </p>
           </CardContent>
         </Card>
 

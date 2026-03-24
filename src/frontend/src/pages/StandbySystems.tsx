@@ -72,9 +72,16 @@ const statusLabels: Record<string, string> = {
   others: "Others",
 };
 
-type UnitType = "CPU" | "Monitor" | "Other";
+type UnitType =
+  | "CPU"
+  | "Monitor"
+  | "Micro Computer"
+  | "All-in-One PC"
+  | "Other";
 
 const unitTypeBadge: Record<UnitType, string> = {
+  "Micro Computer": "bg-cyan-100 text-cyan-700",
+  "All-in-One PC": "bg-violet-100 text-violet-700",
   CPU: "bg-blue-100 text-blue-700 border-blue-200",
   Monitor: "bg-purple-100 text-purple-700 border-purple-200",
   Other: "bg-muted text-muted-foreground border-border",
@@ -537,6 +544,8 @@ export default function StandbySystems() {
                 <SelectContent>
                   <SelectItem value="CPU">CPU</SelectItem>
                   <SelectItem value="Monitor">Monitor</SelectItem>
+                  <SelectItem value="Micro Computer">Micro Computer</SelectItem>
+                  <SelectItem value="All-in-One PC">All-in-One PC</SelectItem>
                   <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>

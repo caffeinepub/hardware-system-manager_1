@@ -1,205 +1,182 @@
 import type { Principal } from "@icp-sdk/core/principal";
-export interface Some<T> {
-    __kind__: "Some";
-    value: T;
+
+export interface Device {
+  id: string;
+  serialNumber: string;
+  deviceType: string;
+  makeAndModel: string;
+  companyName: string;
+  amcTeam: string;
+  amcStartDate: bigint;
+  amcExpiryDate: bigint;
+  assignedSeatId: string;
+  sectionId: string;
+  workingStatus: string;
+  ipAddress: string;
+  remarks: string;
+  previousSection: string;
+  dateMovedToStandby: bigint;
+  createdAt: bigint;
 }
-export interface None {
-    __kind__: "None";
+
+export interface Seat {
+  id: string;
+  sectionId: string;
+  seatNumber: string;
+  currentUser: string;
+  cpuSerial: string;
+  monitorSerial: string;
+  ip1: string;
+  ip2: string;
+  remarks: string;
+  createdAt: bigint;
 }
-export type Option<T> = Some<T> | None;
-export class ExternalBlob {
-    getBytes(): Promise<Uint8Array<ArrayBuffer>>;
-    getDirectURL(): string;
-    static fromURL(url: string): ExternalBlob;
-    static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
-    withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
-}
-export interface StockEntry {
-    id: string;
-    createdAt: bigint;
-    slNo: bigint;
-    monitorSlNo: string;
-    cpuSlNo: string;
-    amcExpiryDate: bigint;
-    amcTeam: string;
-    companyAndModel: string;
-    amcStartDate: bigint;
-}
-export interface Computer {
-    id: string;
-    ip1: string;
-    ip2: string;
-    status: Variant_active_standby_retired;
-    model: string;
-    amcCompany: string;
-    datasheetBlob?: ExternalBlob;
-    monitorModel: string;
-    purchaseDate: bigint;
-    createdAt: bigint;
-    currentUser: string;
-    sectionId: string;
-    serialNumber: string;
-    notes: string;
-    companyName: string;
-    brand: string;
-    amcEndDate: bigint;
-    amcStartDate: bigint;
-    remarks: string;
-    seatNumber: string;
-    monitorSerial: string;
-}
-export interface OtherDevice {
-    id: string;
-    slNo: bigint;
-    unitArticle: string;
-    makeAndModel: string;
-    serialNumber: string;
-    section: string;
-    ipAddress: string;
-    workingStatus: string;
-    remarks: string;
-    createdAt: bigint;
-}
-export interface ProcessStockEntriesResult {
-    updated: bigint;
-    addedToStandby: bigint;
-}
-export interface Complaint {
-    id: string;
-    status: ComplaintStatus;
-    caseClearedDate?: bigint;
-    computerId?: string;
-    createdAt: bigint;
-    spareTakenDate?: bigint;
-    unit: string;
-    description: string;
-    sparesTaken: string;
-    extraCol1: string;
-    extraCol2: string;
-    sectionId?: string;
-    reportedBy: string;
-    amcTeam: string;
-    priority: Priority;
-    caseAttendedDate?: bigint;
-    resolvedAt?: bigint;
-    unitSlNo: string;
-}
-export interface StandbySystem {
-    id: string;
-    status: Variant_available_inUse_retired;
-    model: string;
-    createdAt: bigint;
-    assignedSectionId?: string;
-    serialNumber: string;
-    notes: string;
-    brand: string;
-    condition: Variant_fair_good_poor;
-}
-export interface AMCPart {
-    id: string;
-    associatedComputerId?: string;
-    purchaseDate: bigint;
-    associatedSectionId?: string;
-    partNumber: string;
-    supplier: string;
-    createdAt: bigint;
-    partName: string;
-    notes: string;
-    warrantyExpiry?: bigint;
-    quantity: bigint;
-}
+
 export interface Section {
-    id: string;
-    name: string;
-    createdAt: bigint;
-    description: string;
-    location: string;
+  id: string;
+  name: string;
+  description: string;
+  location: string;
+  createdAt: bigint;
 }
+
+export interface Complaint {
+  id: string;
+  unitSlNo: string;
+  unit: string;
+  serialNumber: string;
+  reportedBy: string;
+  amcTeam: string;
+  caseLoggedDate: bigint;
+  caseAttendedDate: bigint | null;
+  sparesTaken: string;
+  spareTakenDate: bigint | null;
+  caseClearedDate: bigint | null;
+  status: string;
+  remarks1: string;
+  remarks2: string;
+  createdAt: bigint;
+}
+
+export interface MovementLog {
+  id: string;
+  dateTime: bigint;
+  deviceType: string;
+  serialNumber: string;
+  action: string;
+  previousSection: string;
+  newSection: string;
+  triggeredFrom: string;
+  user: string;
+  remarks: string;
+}
+
+export interface StockImportRow {
+  slNo: bigint;
+  companyAndModel: string;
+  cpuSlNo: string;
+  monitorSlNo: string;
+  amcStartDate: bigint;
+  amcExpiryDate: bigint;
+  amcTeam: string;
+}
+
 export interface UserProfile {
-    name: string;
+  name: string;
 }
-export enum ComplaintStatus {
-    resolved = "resolved",
-    open = "open",
-    inProgress = "inProgress"
+
+export interface DashboardStats {
+  totalSeats: bigint;
+  totalStandbyDevices: bigint;
+  pendingComplaints: bigint;
+  clearedComplaints: bigint;
+  totalOtherDevices: bigint;
+  totalDevices: bigint;
 }
-export enum Priority {
-    low = "low",
-    high = "high",
-    medium = "medium"
-}
+
 export enum UserRole {
-    admin = "admin",
-    user = "user",
-    guest = "guest"
+  admin = "admin",
+  user = "user",
+  guest = "guest"
 }
-export enum Variant_active_standby_retired {
-    active = "active",
-    standby = "standby",
-    retired = "retired"
+
+// ── Legacy compat types (used by Computers.tsx / StandbySystems.tsx) ────────
+export type Variant_active_standby_retired = "active" | "standby" | "retired";
+export type ExternalBlob = Uint8Array;
+
+/** Legacy Computer record – maps to Seat + Device in the new backend. */
+export interface Computer {
+  id: string;
+  sectionId: string;
+  seatNumber: string;
+  currentUser: string;
+  serialNumber: string;   // cpuSerial
+  monitorSerial: string;
+  model: string;          // makeAndModel of CPU device
+  brand: string;          // companyName of CPU device
+  companyName: string;
+  amcCompany: string;     // amcTeam of CPU device
+  monitorModel: string;
+  ip1: string;
+  ip2: string;
+  remarks: string;
+  notes: string;
+  purchaseDate: bigint;
+  amcStartDate: bigint;
+  amcEndDate: bigint;
+  status: Variant_active_standby_retired;
+  datasheetBlob?: Uint8Array | null;
+  createdAt: bigint;
 }
-export enum Variant_available_inUse_retired {
-    available = "available",
-    inUse = "inUse",
-    retired = "retired"
+
+/** Legacy StandbySystem record – maps to Device (unassigned) in the new backend. */
+export interface StandbySystem {
+  id: string;
+  serialNumber: string;
+  model: string;          // makeAndModel
+  brand: string;          // deviceType (unit type)
+  condition: "good" | "fair" | "poor";
+  status: string;         // workingStatus
+  notes: string;          // remarks
+  assignedSectionId?: string; // previousSection
+  createdAt: bigint;      // dateMovedToStandby
 }
-export enum Variant_fair_good_poor {
-    fair = "fair",
-    good = "good",
-    poor = "poor"
-}
+
 export interface backendInterface {
-    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    createAMCPart(part: AMCPart): Promise<void>;
-    createComplaint(complaint: Complaint): Promise<void>;
-    createComputer(computer: Computer): Promise<void>;
-    createSection(section: Section): Promise<void>;
-    createStandbySystem(standbySystem: StandbySystem): Promise<void>;
-    createStockEntry(entry: StockEntry): Promise<void>;
-    deleteAMCPart(id: string): Promise<void>;
-    deleteComplaint(id: string): Promise<void>;
-    deleteComputer(id: string): Promise<void>;
-    deleteSection(id: string): Promise<void>;
-    deleteStandbySystem(id: string): Promise<void>;
-    deleteStockEntry(id: string): Promise<void>;
-    createOtherDevice(device: OtherDevice): Promise<void>;
-    getAllOtherDevices(): Promise<Array<OtherDevice>>;
-    updateOtherDevice(device: OtherDevice): Promise<void>;
-    deleteOtherDevice(id: string): Promise<void>;
-    getAMCPart(id: string): Promise<AMCPart | null>;
-    getAllAMCParts(): Promise<Array<AMCPart>>;
-    getAllComplaints(): Promise<Array<Complaint>>;
-    getAllComputers(): Promise<Array<Computer>>;
-    getAllSections(): Promise<Array<Section>>;
-    getAllStandbySystems(): Promise<Array<StandbySystem>>;
-    getAllStockEntries(): Promise<Array<StockEntry>>;
-    getCallerUserProfile(): Promise<UserProfile | null>;
-    getCallerUserRole(): Promise<UserRole>;
-    getComplaint(id: string): Promise<Complaint | null>;
-    getComplaintsByComputer(computerId: string): Promise<Array<Complaint>>;
-    getComplaintsBySection(sectionId: string): Promise<Array<Complaint>>;
-    getComplaintsByStatus(status: ComplaintStatus): Promise<Array<Complaint>>;
-    getComputer(id: string): Promise<Computer | null>;
-    getComputersBySection(sectionId: string): Promise<Array<Computer>>;
-    getComputersWithExpiringAMC(days: bigint): Promise<Array<Computer>>;
-    getDashboardStats(): Promise<{
-        totalStandbySystems: bigint;
-        totalComputers: bigint;
-        computersWithExpiringAMC: bigint;
-        openComplaints: bigint;
-        totalSections: bigint;
-    }>;
-    getExpiringAMCParts(days: bigint): Promise<Array<AMCPart>>;
-    getSection(id: string): Promise<Section | null>;
-    getStandbySystem(id: string): Promise<StandbySystem | null>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
-    isCallerAdmin(): Promise<boolean>;
-    processStockEntries(): Promise<ProcessStockEntriesResult>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    updateAMCPart(part: AMCPart): Promise<void>;
-    updateComplaint(complaint: Complaint): Promise<void>;
-    updateComputer(computer: Computer): Promise<void>;
-    updateSection(section: Section): Promise<void>;
-    updateStandbySystem(standbySystem: StandbySystem): Promise<void>;
-    updateStockEntry(entry: StockEntry): Promise<void>;
+  createSection(section: Section): Promise<void>;
+  getAllSections(): Promise<Array<Section>>;
+  updateSection(section: Section): Promise<void>;
+  deleteSection(id: string): Promise<void>;
+
+  createDevice(device: Device): Promise<void>;
+  getDevice(id: string): Promise<Device | null>;
+  getAllDevices(): Promise<Array<Device>>;
+  updateDevice(device: Device): Promise<void>;
+  deleteDevice(id: string): Promise<void>;
+
+  createSeat(seat: Seat): Promise<void>;
+  getSeat(id: string): Promise<Seat | null>;
+  getAllSeats(): Promise<Array<Seat>>;
+  updateSeat(seat: Seat): Promise<void>;
+  deleteSeat(id: string): Promise<void>;
+
+  importStockRow(row: StockImportRow): Promise<void>;
+
+  createComplaint(complaint: Complaint): Promise<void>;
+  getAllComplaints(): Promise<Array<Complaint>>;
+  updateComplaint(complaint: Complaint): Promise<void>;
+  deleteComplaint(id: string): Promise<void>;
+
+  createMovementLog(log: MovementLog): Promise<void>;
+  getAllMovementLogs(): Promise<Array<MovementLog>>;
+
+  getDashboardStats(): Promise<DashboardStats>;
+
+  clearAllData(): Promise<void>;
+
+  getCallerUserProfile(): Promise<UserProfile | null>;
+  saveCallerUserProfile(profile: UserProfile): Promise<void>;
+
+  isCallerAdmin(): Promise<boolean>;
+  getCallerUserRole(): Promise<UserRole>;
 }

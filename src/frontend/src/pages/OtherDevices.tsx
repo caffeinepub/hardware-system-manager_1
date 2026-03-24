@@ -334,7 +334,27 @@ export default function OtherDevices() {
 
       let currentDevices: OtherDevice[];
       try {
-        currentDevices = await a.getAllOtherDevices();
+        const allDevs = await a.getAllDevices();
+        const computerTypes = new Set([
+          "CPU",
+          "Monitor",
+          "Micro Computer",
+          "All-in-One PC",
+        ]);
+        currentDevices = allDevs
+          .filter((d: any) => !computerTypes.has(d.deviceType))
+          .map((d: any, idx: number) => ({
+            id: d.id,
+            slNo: BigInt(idx + 1),
+            unitArticle: d.deviceType,
+            makeAndModel: d.makeAndModel,
+            serialNumber: d.serialNumber,
+            section: d.sectionId,
+            ipAddress: d.ipAddress,
+            workingStatus: d.workingStatus,
+            remarks: d.remarks,
+            createdAt: d.createdAt,
+          }));
       } catch (fetchErr) {
         console.error("Failed to fetch existing devices:", fetchErr);
         toast.error(
@@ -382,14 +402,23 @@ export default function OtherDevices() {
         const existing = serialMap.get(serialNumber.toLowerCase());
         if (existing) {
           // Update existing
-          await a.updateOtherDevice({
-            ...existing,
-            unitArticle: unitArticle || existing.unitArticle,
+          await a.updateDevice({
+            id: existing.id || existing.serialNumber,
+            serialNumber: existing.serialNumber,
+            deviceType: unitArticle || existing.unitArticle,
             makeAndModel,
-            section,
-            ipAddress,
+            companyName: "",
+            amcTeam: "",
+            amcStartDate: BigInt(0),
+            amcExpiryDate: BigInt(0),
+            assignedSeatId: "",
+            sectionId: section,
             workingStatus: normalizedStatus,
+            ipAddress,
             remarks,
+            previousSection: "",
+            dateMovedToStandby: BigInt(0),
+            createdAt: existing.createdAt,
           });
           updated++;
         } else {
@@ -406,7 +435,24 @@ export default function OtherDevices() {
             remarks,
             createdAt: BigInt(Date.now()) * BigInt(1_000_000),
           };
-          await a.createOtherDevice(newDevice);
+          await a.createDevice({
+            id: serialNumber,
+            serialNumber,
+            deviceType: unitArticle || "Other",
+            makeAndModel,
+            companyName: "",
+            amcTeam: "",
+            amcStartDate: BigInt(0),
+            amcExpiryDate: BigInt(0),
+            assignedSeatId: "",
+            sectionId: section,
+            workingStatus: normalizedStatus,
+            ipAddress,
+            remarks,
+            previousSection: "",
+            dateMovedToStandby: BigInt(0),
+            createdAt: BigInt(Date.now()) * BigInt(1_000_000),
+          });
           serialMap.set(serialNumber.toLowerCase(), newDevice);
           added++;
         }

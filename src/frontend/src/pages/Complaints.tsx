@@ -54,7 +54,6 @@ import {
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Complaint } from "../backend";
-import { type ComplaintStatus, Priority } from "../backend";
 import { useAdmin } from "../contexts/AdminContext";
 import {
   useCreateComplaint,
@@ -68,6 +67,8 @@ import {
 const UNIT_TYPES = [
   "CPU",
   "Monitor",
+  "Micro Computer",
+  "All-in-One PC",
   "Printer",
   "UPS",
   "Keyboard",
@@ -111,7 +112,7 @@ function calcDays(fromNs: bigint, toNs?: bigint): number {
 
 function getStatus(c: Complaint): "Cleared" | "Long Pending" | "Pending" {
   if (c.caseClearedDate && c.caseClearedDate > 0n) return "Cleared";
-  const pending = calcDays(c.createdAt);
+  const pending = calcDays(c.caseLoggedDate ?? 0n);
   if (pending > 7) return "Long Pending";
   return "Pending";
 }
@@ -163,18 +164,20 @@ function exportToCSV(data: Complaint[]) {
     c.unitSlNo,
     c.reportedBy,
     c.amcTeam,
-    fmtNs(c.createdAt),
+    fmtNs(c.caseLoggedDate ?? 0n),
     fmtNs(c.caseAttendedDate),
     c.sparesTaken,
     fmtNs(c.spareTakenDate),
     fmtNs(c.caseClearedDate),
     c.caseClearedDate && c.caseClearedDate > 0n
-      ? calcDays(c.createdAt, c.caseClearedDate)
+      ? calcDays(c.caseLoggedDate ?? 0n, c.caseClearedDate)
       : "",
-    c.caseClearedDate && c.caseClearedDate > 0n ? "" : calcDays(c.createdAt),
+    c.caseClearedDate && c.caseClearedDate > 0n
+      ? ""
+      : calcDays(c.caseLoggedDate ?? 0n),
     getStatus(c),
-    c.extraCol1,
-    c.extraCol2,
+    c.remarks1,
+    c.remarks2,
   ]);
   const csv = [headers, ...rows]
     .map((r) =>
@@ -243,7 +246,7 @@ export default function Complaints() {
     const pending = total - cleared;
     const longPending = complaints.filter((c) => {
       if (c.caseClearedDate && c.caseClearedDate > 0n) return false;
-      return calcDays(c.createdAt) > 7;
+      return calcDays(c.caseLoggedDate ?? 0n) > 7;
     }).length;
     return { total, cleared, pending, longPending };
   }, [complaints]);
@@ -262,8 +265,8 @@ export default function Complaints() {
           c.unit.toLowerCase().includes(q) ||
           c.reportedBy.toLowerCase().includes(q) ||
           c.amcTeam.toLowerCase().includes(q) ||
-          c.extraCol1.toLowerCase().includes(q) ||
-          c.extraCol2.toLowerCase().includes(q),
+          (c.remarks1 ?? "").toLowerCase().includes(q) ||
+          (c.remarks2 ?? "").toLowerCase().includes(q),
       );
     }
 
@@ -282,12 +285,14 @@ export default function Complaints() {
     // Date range filter (case logged date)
     if (filterDateFrom) {
       const fromNs = dateStrToNs(filterDateFrom);
-      if (fromNs) list = list.filter((c) => c.createdAt >= fromNs);
+      if (fromNs) list = list.filter((c) => (c.caseLoggedDate ?? 0n) >= fromNs);
     }
     if (filterDateTo) {
       const toNs = dateStrToNs(filterDateTo);
       if (toNs)
-        list = list.filter((c) => c.createdAt <= toNs + 86_400_000_000_000n);
+        list = list.filter(
+          (c) => (c.caseLoggedDate ?? 0n) <= toNs + 86_400_000_000_000n,
+        );
     }
 
     // Status filter
@@ -318,7 +323,8 @@ export default function Complaints() {
     );
     if (sortByPending) {
       return [...list].sort(
-        (a, b) => calcDays(b.createdAt) - calcDays(a.createdAt),
+        (a, b) =>
+          calcDays(b.caseLoggedDate ?? 0n) - calcDays(a.caseLoggedDate ?? 0n),
       );
     }
     return list;
@@ -342,16 +348,16 @@ export default function Complaints() {
     setForm({
       unitSlNo: c.unitSlNo,
       unit: c.unit,
-      caseLoggedDate: nsToDatStr(c.createdAt),
+      caseLoggedDate: nsToDatStr(c.caseLoggedDate ?? 0n),
       caseAttendedDate: nsToDatStr(c.caseAttendedDate),
       sparesTaken: c.sparesTaken,
       spareTakenDate: nsToDatStr(c.spareTakenDate),
       caseClearedDate: nsToDatStr(c.caseClearedDate),
       reportedBy: c.reportedBy,
       amcTeam: c.amcTeam,
-      extraCol1: c.extraCol1,
-      extraCol2: c.extraCol2,
-      description: c.description,
+      extraCol1: c.remarks1 ?? "",
+      extraCol2: c.remarks2 ?? "",
+      description: "",
     });
     setDialogOpen(true);
   };
@@ -373,29 +379,29 @@ export default function Complaints() {
 
     const clearedNs = dateStrToNs(form.caseClearedDate);
     const loggedNs = dateStrToNs(form.caseLoggedDate) ?? BigInt(Date.now());
-    const autoStatus: ComplaintStatus = clearedNs
-      ? ("resolved" as ComplaintStatus)
-      : ("open" as ComplaintStatus);
+    const autoStatus = clearedNs ? "Cleared" : "Pending";
 
     const data: Complaint = {
       id: editingComplaint?.id ?? crypto.randomUUID(),
       unitSlNo: form.unitSlNo,
       unit: form.unit,
+      serialNumber: form.unitSlNo,
+      caseLoggedDate: loggedNs,
       caseAttendedDate: dateStrToNs(form.caseAttendedDate),
       sparesTaken: form.sparesTaken,
       spareTakenDate: dateStrToNs(form.spareTakenDate),
       caseClearedDate: clearedNs,
       reportedBy: form.reportedBy,
       amcTeam: form.amcTeam,
+      remarks1: form.extraCol1,
+      remarks2: form.extraCol2,
+      status: autoStatus as any,
+      createdAt: editingComplaint?.createdAt ?? BigInt(Date.now()) * 1_000_000n,
+      // Legacy required fields
+      description: "",
       extraCol1: form.extraCol1,
       extraCol2: form.extraCol2,
-      status: autoStatus,
-      priority: (editingComplaint?.priority ?? Priority.medium) as Priority,
-      sectionId: editingComplaint?.sectionId ?? undefined,
-      computerId: editingComplaint?.computerId ?? undefined,
-      description: form.description,
-      createdAt: loggedNs,
-      resolvedAt: clearedNs ?? editingComplaint?.resolvedAt,
+      priority: "medium" as any,
     };
 
     try {
@@ -690,7 +696,7 @@ export default function Complaints() {
                   </TableHeader>
                   <TableBody>
                     {pendingList.map((c, idx) => {
-                      const pDays = calcDays(c.createdAt);
+                      const pDays = calcDays(c.caseLoggedDate ?? 0n);
                       const isLong = pDays > 7;
                       return (
                         <TableRow
@@ -719,7 +725,7 @@ export default function Complaints() {
                             {c.amcTeam || "—"}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {fmtNs(c.createdAt)}
+                            {fmtNs(c.caseLoggedDate ?? 0n)}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {fmtNs(c.caseAttendedDate)}
@@ -740,7 +746,7 @@ export default function Complaints() {
                             {c.sparesTaken || "—"}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">
-                            {[c.extraCol1, c.extraCol2]
+                            {[c.remarks1 ?? "", c.remarks2 ?? ""]
                               .filter(Boolean)
                               .join(" | ") || "—"}
                           </TableCell>
@@ -868,7 +874,7 @@ export default function Complaints() {
                           {c.amcTeam || "—"}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {fmtNs(c.createdAt)}
+                          {fmtNs(c.caseLoggedDate ?? 0n)}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           {fmtNs(c.caseAttendedDate)}
@@ -878,14 +884,18 @@ export default function Complaints() {
                         </TableCell>
                         <TableCell>
                           <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-semibold px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200">
-                            {calcDays(c.createdAt, c.caseClearedDate)}d
+                            {calcDays(
+                              c.caseLoggedDate ?? 0n,
+                              c.caseClearedDate,
+                            )}
+                            d
                           </span>
                         </TableCell>
                         <TableCell className="text-sm max-w-[120px] truncate">
                           {c.sparesTaken || "—"}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">
-                          {[c.extraCol1, c.extraCol2]
+                          {[c.remarks1 ?? "", c.remarks2 ?? ""]
                             .filter(Boolean)
                             .join(" | ") || "—"}
                         </TableCell>

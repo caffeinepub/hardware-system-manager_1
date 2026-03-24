@@ -224,6 +224,8 @@ export default function MovementHistory() {
               <SelectItem value="all">All Devices</SelectItem>
               <SelectItem value="CPU">CPU</SelectItem>
               <SelectItem value="Monitor">Monitor</SelectItem>
+              <SelectItem value="Micro Computer">Micro Computer</SelectItem>
+              <SelectItem value="All-in-One PC">All-in-One PC</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filterAction} onValueChange={setFilterAction}>

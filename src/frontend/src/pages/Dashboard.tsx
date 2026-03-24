@@ -179,21 +179,23 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard
           title="Total Sections"
-          value={isLoading ? "—" : Number(stats?.totalSections ?? 0)}
+          value={isLoading ? "—" : Number((stats as any)?.totalSeats ?? 0)}
           icon={Building2}
           color="bg-primary/10 text-primary"
           loading={isLoading}
         />
         <StatCard
           title="Total Systems (Pairs)"
-          value={isLoading ? "—" : Number(stats?.totalComputers ?? 0)}
+          value={isLoading ? "—" : Number((stats as any)?.totalSeats ?? 0)}
           icon={Monitor}
           color="bg-teal-100 text-teal-700"
           loading={isLoading}
         />
         <StatCard
           title="Standby Systems"
-          value={isLoading ? "—" : Number(stats?.totalStandbySystems ?? 0)}
+          value={
+            isLoading ? "—" : Number((stats as any)?.totalStandbyDevices ?? 0)
+          }
           icon={Server}
           color="bg-blue-100 text-blue-700"
           loading={isLoading}
@@ -213,8 +215,10 @@ export default function Dashboard() {
           loading={isLoading}
         />
         <StatCard
-          title="AMC Expiring (30d)"
-          value={isLoading ? "—" : Number(stats?.computersWithExpiringAMC ?? 0)}
+          title="Other Devices"
+          value={
+            isLoading ? "—" : Number((stats as any)?.totalOtherDevices ?? 0)
+          }
           icon={Clock}
           color="bg-red-100 text-red-700"
           loading={isLoading}
@@ -406,8 +410,8 @@ export default function Dashboard() {
               : [
                   {
                     label: "Total sections registered",
-                    val: Number(stats?.totalSections ?? 0),
-                    max: Math.max(Number(stats?.totalSections ?? 1), 1),
+                    val: Number((stats as any)?.totalSeats ?? 0),
+                    max: Math.max(Number((stats as any)?.totalSeats ?? 1), 1),
                     color: "bg-primary",
                   },
                   {
@@ -430,9 +434,9 @@ export default function Dashboard() {
                     color: "bg-orange-500",
                   },
                   {
-                    label: "AMC expiring in 30 days",
-                    val: Number(stats?.computersWithExpiringAMC ?? 0),
-                    max: Math.max(computers.length, 1),
+                    label: "Other devices registered",
+                    val: Number((stats as any)?.totalOtherDevices ?? 0),
+                    max: Math.max(Number((stats as any)?.totalDevices ?? 1), 1),
                     color: "bg-red-500",
                   },
                 ].map((item) => (

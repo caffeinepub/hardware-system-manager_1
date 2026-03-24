@@ -10,7 +10,23 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -20,48 +36,120 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   CheckCircle2,
   Database,
   Download,
   Loader2,
-  RefreshCw,
+  Pencil,
+  Plus,
   Trash2,
   Upload,
-  X,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAdmin } from "../contexts/AdminContext";
 import { useActor } from "../hooks/useActor";
-import {
-  useCreateStockEntry,
-  useDeleteStockEntry,
-  useGetAllStockEntries,
-} from "../hooks/useQueries";
 import { formatDate, getAMCStatus } from "../utils/formatters";
 
-// ─── CSV Template ─────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-const STOCK_CSV_HEADERS = [
-  "Company & Model",
-  "CPU Sl No",
-  "Monitor Sl No",
-  "AMC Start Date",
-  "AMC Expiry Date",
-  "AMC Team",
-];
+const DEVICE_TYPES = [
+  "CPU",
+  "Monitor",
+  "Micro Computer",
+  "All-in-One PC",
+  "Printer",
+  "Scanner",
+  "UPS",
+  "Laptop",
+  "Biometric Device",
+  "Thermal Printer",
+  "Franking Machine",
+  "Photocopier",
+  "Other",
+] as const;
 
-interface StockRow {
-  companyAndModel: string;
-  cpuSlNo: string;
-  monitorSlNo: string;
-  amcStartDate: string;
-  amcExpiryDate: string;
+const STATUS_OPTIONS = [
+  "Available",
+  "Working",
+  "Issue Reported",
+  "e-Waste",
+  "Not Working",
+  "Under Repair",
+  "Others",
+] as const;
+
+const DEVICE_TYPE_COLORS: Record<string, string> = {
+  CPU: "bg-blue-100 text-blue-700 border-blue-200",
+  Monitor: "bg-purple-100 text-purple-700 border-purple-200",
+  "Micro Computer": "bg-cyan-100 text-cyan-700 border-cyan-200",
+  "All-in-One PC": "bg-violet-100 text-violet-700 border-violet-200",
+  Printer: "bg-green-100 text-green-700 border-green-200",
+  Scanner: "bg-teal-100 text-teal-700 border-teal-200",
+  UPS: "bg-orange-100 text-orange-700 border-orange-200",
+  Laptop: "bg-indigo-100 text-indigo-700 border-indigo-200",
+  "Biometric Device": "bg-pink-100 text-pink-700 border-pink-200",
+  "Thermal Printer": "bg-yellow-100 text-yellow-700 border-yellow-200",
+  "Franking Machine": "bg-amber-100 text-amber-700 border-amber-200",
+  Photocopier: "bg-gray-100 text-gray-700 border-gray-200",
+  Other: "bg-slate-100 text-slate-700 border-slate-200",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  Available: "bg-green-100 text-green-700 border-green-200",
+  Working: "bg-green-100 text-green-700 border-green-200",
+  "Issue Reported": "bg-orange-100 text-orange-700 border-orange-200",
+  "e-Waste": "bg-red-100 text-red-700 border-red-200",
+  "Not Working": "bg-red-100 text-red-700 border-red-200",
+  "Under Repair": "bg-amber-100 text-amber-700 border-amber-200",
+  Others: "bg-gray-100 text-gray-700 border-gray-200",
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface CsvRow {
+  deviceType: string;
+  serialNumber: string;
+  makeAndModel: string;
+  section: string;
+  ipAddress: string;
+  status: string;
   amcTeam: string;
+  amcStartDate: string;
+  amcEndDate: string;
+  remarks: string;
 }
+
+interface FormState {
+  deviceType: string;
+  serialNumber: string;
+  makeAndModel: string;
+  section: string;
+  ipAddress: string;
+  status: string;
+  amcTeam: string;
+  amcStartDate: string;
+  amcEndDate: string;
+  remarks: string;
+}
+
+const EMPTY_FORM: FormState = {
+  deviceType: "CPU",
+  serialNumber: "",
+  makeAndModel: "",
+  section: "",
+  ipAddress: "",
+  status: "Available",
+  amcTeam: "",
+  amcStartDate: "",
+  amcEndDate: "",
+  remarks: "",
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
@@ -82,7 +170,7 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-function parseStockCSV(text: string): StockRow[] {
+function parseUnifiedCSV(text: string): CsvRow[] {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -93,53 +181,111 @@ function parseStockCSV(text: string): StockRow[] {
     .map((line) => {
       const cols = parseCSVLine(line);
       return {
-        companyAndModel: (cols[0] ?? "").trim(),
-        cpuSlNo: (cols[1] ?? "").trim(),
-        monitorSlNo: (cols[2] ?? "").trim(),
-        amcStartDate: (cols[3] ?? "").trim(),
-        amcExpiryDate: (cols[4] ?? "").trim(),
-        amcTeam: (cols[5] ?? "").trim(),
+        deviceType: (cols[0] ?? "").trim(),
+        serialNumber: (cols[1] ?? "").trim(),
+        makeAndModel: (cols[2] ?? "").trim(),
+        section: (cols[3] ?? "").trim(),
+        ipAddress: (cols[4] ?? "").trim(),
+        status: (cols[5] ?? "").trim(),
+        amcTeam: (cols[6] ?? "").trim(),
+        amcStartDate: (cols[7] ?? "").trim(),
+        amcEndDate: (cols[8] ?? "").trim(),
+        remarks: (cols[9] ?? "").trim(),
       };
     })
-    .filter((r) => r.cpuSlNo || r.companyAndModel);
+    .filter((r) => r.serialNumber);
 }
 
 function parseDateToBigInt(dateStr: string): bigint {
   if (!dateStr) return BigInt(0);
-  // Try DD/MM/YYYY
   const dmyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (dmyMatch) {
     const [, d, m, y] = dmyMatch;
     const ms = new Date(Number(y), Number(m) - 1, Number(d)).getTime();
     return BigInt(Number.isNaN(ms) ? 0 : ms);
   }
-  // Try YYYY-MM-DD or other ISO formats
   const ms = new Date(dateStr).getTime();
   return BigInt(Number.isNaN(ms) ? 0 : ms);
 }
 
-function downloadStockTemplate() {
-  const rows = [
-    STOCK_CSV_HEADERS.join(","),
-    "HP EliteDesk 800 G5,SN123456789,MON987654321,01/04/2024,31/03/2025,TechAMC Solutions",
+function downloadTemplate() {
+  const headers = [
+    "Device Type",
+    "Serial Number",
+    "Make and Model",
+    "Section",
+    "IP Address",
+    "Status",
+    "AMC Team",
+    "AMC Start Date",
+    "AMC End Date",
+    "Remarks",
   ];
-  const csvContent = rows.join("\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const rows = [
+    headers.join(","),
+    "CPU,SN123456789,HP EliteDesk 800 G5,D1,,Available,TechAMC Solutions,01/04/2024,31/03/2025,Main workstation",
+    "Monitor,MON987654321,Dell P2422H,D1,,Available,TechAMC Solutions,01/04/2024,31/03/2025,",
+    "Printer,PRN001,HP LaserJet Pro M404n,Officers,,Working,PrintAMC,01/04/2024,31/03/2025,",
+  ];
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "stock_data_template.csv";
+  link.download = "full_stock_template.csv";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
 
-// ─── AMC Badge ────────────────────────────────────────────────────────────────
+function exportDevicesCSV(devices: any[]) {
+  const headers = [
+    "Device Type",
+    "Serial Number",
+    "Make and Model",
+    "Section",
+    "IP Address",
+    "Status",
+    "AMC Team",
+    "AMC Start Date",
+    "AMC End Date",
+    "Remarks",
+  ];
+  const rows = devices.map((d) => [
+    d.deviceType ?? "",
+    d.serialNumber ?? "",
+    d.makeAndModel ?? d.companyName ?? "",
+    d.sectionId ?? "",
+    d.ipAddress ?? "",
+    d.workingStatus ?? "",
+    d.amcTeam ?? "",
+    d.amcStartDate && d.amcStartDate > BigInt(0)
+      ? formatDate(d.amcStartDate)
+      : "",
+    d.amcExpiryDate && d.amcExpiryDate > BigInt(0)
+      ? formatDate(d.amcExpiryDate)
+      : "",
+    d.remarks ?? "",
+  ]);
+  const csv = [headers, ...rows]
+    .map((r) => r.map((c: string) => `"${c}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "full_stock_export.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function AmcExpiryBadge({ date }: { date: bigint }) {
   if (!date || date === BigInt(0)) {
-    return <span className="text-muted-foreground">—</span>;
+    return <span className="text-muted-foreground text-xs">—</span>;
   }
   const status = getAMCStatus(date);
   const label = formatDate(date);
@@ -151,68 +297,96 @@ function AmcExpiryBadge({ date }: { date: bigint }) {
         : "bg-green-100 text-green-700 border-green-200";
   return (
     <span
-      className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cls}`}
+      className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border ${cls}`}
     >
       {label}
     </span>
   );
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function DeviceTypeBadge({ type }: { type: string }) {
+  const cls =
+    DEVICE_TYPE_COLORS[type] ?? "bg-slate-100 text-slate-700 border-slate-200";
+  return (
+    <span
+      className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border ${cls}`}
+    >
+      {type}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cls =
+    STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700 border-gray-200";
+  return (
+    <span
+      className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border ${cls}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function StockData() {
   const { isLoggedIn } = useAdmin();
-  const { actor } = useActor();
+  const { actor, isFetching: actorFetching } = useActor();
   const queryClient = useQueryClient();
 
-  const { data: stockEntries = [], isLoading } = useGetAllStockEntries();
-  const createMutation = useCreateStockEntry();
-  const deleteMutation = useDeleteStockEntry();
+  const { data: devices = [], isLoading } = useQuery<any[]>({
+    queryKey: ["devices"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getAllDevices();
+    },
+    enabled: !!actor && !actorFetching,
+  });
 
   // CSV upload state
-  const [csvRows, setCsvRows] = useState<StockRow[]>([]);
-  const [csvFileName, setCsvFileName] = useState<string>("");
+  const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
+  const [csvFileName, setCsvFileName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importDone, setImportDone] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
-  const [updatedCount, setUpdatedCount] = useState(0);
-  const [standbyCount, setStandbyCount] = useState(0);
   const [importErrors, setImportErrors] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Delete confirmation
+  // Search
+  const [search, setSearch] = useState("");
+
+  // Delete
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  // Sorted entries by slNo
-  const sortedEntries = [...stockEntries].sort((a, b) =>
-    Number(a.slNo) < Number(b.slNo) ? -1 : 1,
-  );
+  // Add / Edit dialog
+  const [entryDialogOpen, setEntryDialogOpen] = useState(false);
+  const [editingDevice, setEditingDevice] = useState<any | null>(null);
+  const [formState, setFormState] = useState<FormState>(EMPTY_FORM);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["devices"] });
+    queryClient.invalidateQueries({ queryKey: ["computers"] });
+    queryClient.invalidateQueries({ queryKey: ["standby"] });
+    queryClient.invalidateQueries({ queryKey: ["other-devices"] });
+  };
 
   // ── File handling ──────────────────────────────────────────────────────────
 
-  const handleFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      toast.error("Please select a .csv file");
-      return;
-    }
-    const text = await file.text();
-    const rows = parseStockCSV(text);
-    setCsvRows(rows);
+  const handleFile = (file: File) => {
     setCsvFileName(file.name);
     setImportDone(false);
-    setImportProgress(0);
-    setSavedCount(0);
-    setUpdatedCount(0);
-    setStandbyCount(0);
-    setImportErrors(0);
-    if (rows.length === 0) {
-      toast.error("No data rows found in CSV");
-    } else {
-      toast.success(`${rows.length} rows parsed from ${file.name}`);
-    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const rows = parseUnifiedCSV(text);
+      setCsvRows(rows);
+    };
+    reader.readAsText(file);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -224,7 +398,7 @@ export default function StockData() {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    if (file?.name.endsWith(".csv")) handleFile(file);
   };
 
   // ── Import ─────────────────────────────────────────────────────────────────
@@ -233,539 +407,652 @@ export default function StockData() {
     if (!actor || csvRows.length === 0) return;
     setIsImporting(true);
     setImportProgress(0);
+    setSavedCount(0);
+    setImportErrors(0);
 
     let saved = 0;
     let errors = 0;
 
-    // Save each row as a StockEntry
     for (let i = 0; i < csvRows.length; i++) {
       const row = csvRows[i];
       try {
-        const entry = {
-          id: crypto.randomUUID(),
-          createdAt: BigInt(Date.now()),
-          slNo: BigInt(i + 1),
-          companyAndModel: row.companyAndModel,
-          cpuSlNo: row.cpuSlNo,
-          monitorSlNo: row.monitorSlNo,
-          amcStartDate: parseDateToBigInt(row.amcStartDate),
-          amcExpiryDate: parseDateToBigInt(row.amcExpiryDate),
+        const device = {
+          id: row.serialNumber,
+          serialNumber: row.serialNumber,
+          deviceType: row.deviceType,
+          makeAndModel: row.makeAndModel,
+          companyName: row.makeAndModel,
           amcTeam: row.amcTeam,
+          amcStartDate: parseDateToBigInt(row.amcStartDate),
+          amcExpiryDate: parseDateToBigInt(row.amcEndDate),
+          assignedSeatId: "",
+          sectionId: row.section,
+          workingStatus: row.status || "Available",
+          ipAddress: row.ipAddress,
+          remarks: row.remarks,
+          previousSection: "",
+          dateMovedToStandby: BigInt(0),
+          createdAt: BigInt(Date.now()),
         };
-        await createMutation.mutateAsync(entry);
+        await (actor as any).createDevice(device);
         saved++;
-      } catch {
+      } catch (err) {
+        console.error("createDevice failed:", err);
         errors++;
       }
       setImportProgress(Math.round(((i + 1) / csvRows.length) * 100));
     }
 
-    // After saving entries, call processStockEntries to update computers & standby
-    let updComputers = 0;
-    let addedStandby = 0;
-    if (saved > 0) {
-      try {
-        const result = await actor.processStockEntries();
-        updComputers = Number(result.updated);
-        addedStandby = Number(result.addedToStandby);
-      } catch {
-        // non-fatal
-      }
-    }
-
-    // Invalidate all affected queries
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["stock-entries"] }),
-      queryClient.invalidateQueries({ queryKey: ["computers"] }),
-      queryClient.invalidateQueries({ queryKey: ["standby"] }),
-    ]);
-
     setSavedCount(saved);
-    setUpdatedCount(updComputers);
-    setStandbyCount(addedStandby);
     setImportErrors(errors);
     setIsImporting(false);
     setImportDone(true);
+    invalidateAll();
 
-    if (errors === 0 && saved > 0) {
-      toast.success(
-        `${saved} entries saved, ${updComputers} computers updated, ${addedStandby} added to standby`,
-      );
-    } else if (saved === 0) {
-      toast.error("Import failed. Check your CSV format.");
+    if (errors === 0) {
+      toast.success(`Imported ${saved} device(s) successfully`);
     } else {
-      toast.error(`${saved} saved, ${errors} failed`);
+      toast.warning(`Imported ${saved} device(s), ${errors} error(s)`);
     }
   };
 
-  const handleReset = () => {
-    setCsvRows([]);
-    setCsvFileName("");
-    setImportDone(false);
-    setImportProgress(0);
-    setSavedCount(0);
-    setUpdatedCount(0);
-    setStandbyCount(0);
-    setImportErrors(0);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  // ── Add / Edit ─────────────────────────────────────────────────────────────
+
+  const openAddDialog = () => {
+    setEditingDevice(null);
+    setFormState(EMPTY_FORM);
+    setEntryDialogOpen(true);
+  };
+
+  const openEditDialog = (device: any) => {
+    setEditingDevice(device);
+    setFormState({
+      deviceType: device.deviceType ?? "CPU",
+      serialNumber: device.serialNumber ?? "",
+      makeAndModel: device.makeAndModel ?? device.companyName ?? "",
+      section: device.sectionId ?? "",
+      ipAddress: device.ipAddress ?? "",
+      status: device.workingStatus ?? "Available",
+      amcTeam: device.amcTeam ?? "",
+      amcStartDate:
+        device.amcStartDate && device.amcStartDate > BigInt(0)
+          ? formatDate(device.amcStartDate)
+          : "",
+      amcEndDate:
+        device.amcExpiryDate && device.amcExpiryDate > BigInt(0)
+          ? formatDate(device.amcExpiryDate)
+          : "",
+      remarks: device.remarks ?? "",
+    });
+    setEntryDialogOpen(true);
+  };
+
+  const handleSaveEntry = async () => {
+    if (!actor || !formState.serialNumber.trim()) {
+      toast.error("Serial Number is required");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const device = {
+        id: formState.serialNumber.trim(),
+        serialNumber: formState.serialNumber.trim(),
+        deviceType: formState.deviceType,
+        makeAndModel: formState.makeAndModel,
+        companyName: formState.makeAndModel,
+        amcTeam: formState.amcTeam,
+        amcStartDate: parseDateToBigInt(formState.amcStartDate),
+        amcExpiryDate: parseDateToBigInt(formState.amcEndDate),
+        assignedSeatId: editingDevice?.assignedSeatId ?? "",
+        sectionId: formState.section,
+        workingStatus: formState.status,
+        ipAddress: formState.ipAddress,
+        remarks: formState.remarks,
+        previousSection: editingDevice?.previousSection ?? "",
+        dateMovedToStandby: editingDevice?.dateMovedToStandby ?? BigInt(0),
+        createdAt: editingDevice?.createdAt ?? BigInt(Date.now()),
+      };
+      if (editingDevice) {
+        await (actor as any).updateDevice(device);
+        toast.success("Device updated successfully");
+      } else {
+        await (actor as any).createDevice(device);
+        toast.success("Device added successfully");
+      }
+      invalidateAll();
+      setEntryDialogOpen(false);
+    } catch (err) {
+      toast.error(`Save failed: ${err}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // ── Delete ─────────────────────────────────────────────────────────────────
 
-  const openDelete = (id: string) => {
-    setDeletingId(id);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDelete = async () => {
-    if (!deletingId) return;
+  const handleDeleteConfirm = async () => {
+    if (!actor || !deletingId) return;
     try {
-      await deleteMutation.mutateAsync(deletingId);
-      toast.success("Entry deleted");
+      await (actor as any).deleteDevice(deletingId);
+      toast.success("Device deleted");
+      invalidateAll();
+    } catch (err) {
+      toast.error(`Delete failed: ${err}`);
+    } finally {
       setDeleteDialogOpen(false);
-    } catch {
-      toast.error("Failed to delete entry");
+      setDeletingId(null);
     }
   };
+
+  // ── Filtered devices ───────────────────────────────────────────────────────
+
+  const filteredDevices = devices.filter((d) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      (d.serialNumber ?? "").toLowerCase().includes(q) ||
+      (d.deviceType ?? "").toLowerCase().includes(q) ||
+      (d.makeAndModel ?? d.companyName ?? "").toLowerCase().includes(q) ||
+      (d.sectionId ?? "").toLowerCase().includes(q) ||
+      (d.amcTeam ?? "").toLowerCase().includes(q)
+    );
+  });
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 animate-fade-in" data-ocid="stock.section">
+    <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-display font-bold text-foreground">
-            Stock Data
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            CPU &amp; Monitor inventory with AMC details — upload a data sheet
-            to populate
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Database className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">
+              Unified Stock Register
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              All devices — CPUs, Monitors, Micro Computers, All-in-One PCs,
+              Printers, UPS, Laptops and more
+            </p>
+          </div>
         </div>
         {isLoggedIn && (
           <Button
-            variant="outline"
+            onClick={openAddDialog}
             size="sm"
-            className="gap-2 flex-shrink-0"
-            onClick={downloadStockTemplate}
-            data-ocid="stock.secondary_button"
+            data-ocid="stock.open_modal_button"
           >
-            <Download className="w-4 h-4" />
-            Download Template
+            <Plus className="h-4 w-4 mr-1" />
+            Add Device
           </Button>
         )}
       </div>
 
-      {/* ── CSV Upload (logged-in only) ──────────────────────────────────── */}
+      {/* Stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          {
+            label: "Total Devices",
+            value: devices.length,
+            color: "text-primary",
+          },
+          {
+            label: "CPUs",
+            value: devices.filter((d) => d.deviceType === "CPU").length,
+            color: "text-blue-600",
+          },
+          {
+            label: "Monitors",
+            value: devices.filter((d) => d.deviceType === "Monitor").length,
+            color: "text-purple-600",
+          },
+          {
+            label: "Other Devices",
+            value: devices.filter(
+              (d) => d.deviceType !== "CPU" && d.deviceType !== "Monitor",
+            ).length,
+            color: "text-green-600",
+          },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className="bg-card border border-border rounded-lg p-4 text-center"
+          >
+            <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Import Section (auth-gated) */}
       {isLoggedIn && (
-        <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-          {/* Upload header */}
-          <div className="px-5 py-4 border-b border-border bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="font-display font-semibold text-base text-foreground">
-                Upload Stock Data Sheet
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                CSV columns:{" "}
-                <span className="font-mono text-foreground/70">
-                  {STOCK_CSV_HEADERS.join(", ")}
-                </span>
-              </p>
-            </div>
-          </div>
-
-          <div className="p-5 space-y-4">
-            {/* CSV column badges */}
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Expected CSV Columns
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {STOCK_CSV_HEADERS.map((h) => (
-                  <Badge
-                    key={h}
-                    variant="outline"
-                    className="text-xs font-mono"
-                  >
-                    {h}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Drop zone */}
-            <button
-              type="button"
-              className={`w-full text-left relative rounded-xl border-2 border-dashed transition-all cursor-pointer ${
-                isDragging
-                  ? "border-primary bg-primary/5 scale-[1.01]"
-                  : "border-border hover:border-primary/50 hover:bg-muted/20"
-              }`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Upload stock data CSV"
-              data-ocid="stock.dropzone"
+        <div className="bg-card border border-border rounded-lg p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold">Import Full Stock (CSV)</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadTemplate}
+              data-ocid="stock.upload_button"
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={handleFileInput}
-                data-ocid="stock.upload_button"
-              />
-              <div className="flex flex-col items-center justify-center py-8 gap-3 pointer-events-none">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-                  <Upload
-                    className={`w-5 h-5 ${isDragging ? "text-primary" : "text-primary/60"}`}
-                  />
-                </div>
-                {csvFileName ? (
-                  <>
-                    <p className="font-display font-semibold text-foreground">
-                      {csvFileName}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {csvRows.length} row{csvRows.length !== 1 ? "s" : ""}{" "}
-                      parsed — click to replace
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-display font-semibold text-foreground">
-                      Drop stock data sheet here
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      or click to browse — .csv files only
-                    </p>
-                  </>
-                )}
-              </div>
-            </button>
-
-            {/* Import progress */}
-            {isImporting && (
-              <div
-                className="rounded-xl border border-border bg-card p-4 space-y-3"
-                data-ocid="stock.loading_state"
-              >
-                <div className="flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                  <p className="font-semibold text-sm text-foreground">
-                    Saving entries… {importProgress}%
-                  </p>
-                </div>
-                <Progress value={importProgress} className="h-2" />
-              </div>
-            )}
-
-            {/* Import result summary */}
-            {importDone && !isImporting && (
-              <div
-                className={`rounded-xl border p-4 space-y-2 ${
-                  importErrors === 0 && savedCount > 0
-                    ? "border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900"
-                    : "border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900"
-                }`}
-                data-ocid={
-                  importErrors === 0 && savedCount > 0
-                    ? "stock.success_state"
-                    : "stock.error_state"
-                }
-              >
-                <div className="flex items-center gap-2">
-                  {importErrors === 0 && savedCount > 0 ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <AlertCircle className="w-5 h-5 text-amber-600" />
-                  )}
-                  <p className="font-display font-semibold text-sm">
-                    Import Complete
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-3 text-sm">
-                  <span className="text-green-700 dark:text-green-400 font-semibold">
-                    {savedCount} entries saved
-                  </span>
-                  <span className="text-blue-700 dark:text-blue-400 font-semibold">
-                    {updatedCount} computers updated
-                  </span>
-                  <span className="text-purple-700 dark:text-purple-400 font-semibold">
-                    {standbyCount} added to standby
-                  </span>
-                  {importErrors > 0 && (
-                    <span className="text-red-600 font-semibold">
-                      {importErrors} errors
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Preview + action buttons */}
-            {csvRows.length > 0 && !isImporting && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-foreground">
-                    Preview —{" "}
-                    <span className="text-primary">{csvRows.length} rows</span>
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-2 text-muted-foreground"
-                      onClick={handleReset}
-                      disabled={isImporting}
-                      data-ocid="stock.cancel_button"
-                    >
-                      <X className="w-4 h-4" />
-                      Clear
-                    </Button>
-                    {importDone ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-2"
-                        onClick={handleReset}
-                        data-ocid="stock.secondary_button"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Upload Another
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="gap-2"
-                        onClick={handleImport}
-                        disabled={isImporting || csvRows.length === 0}
-                        data-ocid="stock.primary_button"
-                      >
-                        <Upload className="w-4 h-4" />
-                        Import {csvRows.length} Entries
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Preview table */}
-                <div className="rounded-xl border border-border bg-card overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/40">
-                          <TableHead className="text-xs uppercase tracking-wide whitespace-nowrap">
-                            #
-                          </TableHead>
-                          {STOCK_CSV_HEADERS.map((h) => (
-                            <TableHead
-                              key={h}
-                              className="text-xs uppercase tracking-wide whitespace-nowrap"
-                            >
-                              {h}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {csvRows.map((row, idx) => (
-                          <TableRow
-                            key={`preview-${idx + 1}`}
-                            data-ocid={`stock.row.${idx + 1}`}
-                            className="hover:bg-muted/20"
-                          >
-                            <TableCell className="text-xs text-muted-foreground font-mono">
-                              {idx + 1}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {row.companyAndModel || (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                              {row.cpuSlNo || (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                              {row.monitorSlNo || (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {row.amcStartDate || (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {row.amcExpiryDate || (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {row.amcTeam || (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </div>
-            )}
+              <Download className="h-4 w-4 mr-1" />
+              Download Template
+            </Button>
           </div>
+
+          {/* Drop zone */}
+          <label
+            htmlFor="stock-file-input"
+            className={`block border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+              isDragging
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-primary/50"
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            data-ocid="stock.dropzone"
+          >
+            <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            {csvFileName ? (
+              <>
+                <p className="font-medium text-sm">{csvFileName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {csvRows.length} row(s) ready to import
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Drop a CSV file here or click to select
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Columns: Device Type, Serial Number, Make and Model, Section,
+                  IP Address, Status, AMC Team, AMC Start Date, AMC End Date,
+                  Remarks
+                </p>
+              </>
+            )}
+            <input
+              id="stock-file-input"
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleFileInput}
+            />
+          </label>
+
+          {/* Import progress */}
+          {isImporting && (
+            <div className="space-y-1" data-ocid="stock.loading_state">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Importing…</span>
+                <span>{importProgress}%</span>
+              </div>
+              <Progress value={importProgress} className="h-2" />
+            </div>
+          )}
+
+          {/* Import result */}
+          {importDone && (
+            <div
+              className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${
+                importErrors === 0
+                  ? "bg-green-50 text-green-700 border border-green-200"
+                  : "bg-amber-50 text-amber-700 border border-amber-200"
+              }`}
+              data-ocid="stock.success_state"
+            >
+              {importErrors === 0 ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 shrink-0" />
+              )}
+              <span>
+                {savedCount} device(s) imported
+                {importErrors > 0 ? `, ${importErrors} error(s)` : ""}
+              </span>
+            </div>
+          )}
+
+          {/* Import button */}
+          {csvRows.length > 0 && !isImporting && (
+            <Button
+              onClick={handleImport}
+              disabled={!actor}
+              data-ocid="stock.primary_button"
+            >
+              {!actor ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4 mr-2" />
+              )}
+              Import {csvRows.length} Device(s)
+            </Button>
+          )}
         </div>
       )}
 
-      {/* ── Stock List ───────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-border bg-muted/30 flex items-center justify-between gap-3">
-          <div>
-            <h3 className="font-display font-semibold text-base text-foreground">
-              Stock Register
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {sortedEntries.length} entr
-              {sortedEntries.length !== 1 ? "ies" : "y"} recorded
-            </p>
+      {/* Stock Register Table */}
+      <div className="bg-card border border-border rounded-lg">
+        <div className="p-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-base font-semibold">Stock Register</h2>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Search devices…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-56 h-8 text-sm"
+              data-ocid="stock.search_input"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportDevicesCSV(filteredDevices)}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Export CSV
+            </Button>
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="p-5 space-y-3" data-ocid="stock.loading_state">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <Skeleton key={n} className="h-10 rounded-lg w-full" />
-            ))}
-          </div>
-        ) : sortedEntries.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-4"
-            data-ocid="stock.empty_state"
-          >
-            <Database className="w-12 h-12 opacity-30" />
-            <p className="font-display font-semibold text-lg text-foreground">
-              No stock entries yet
-            </p>
-            <p className="text-sm text-center max-w-xs">
-              {isLoggedIn
-                ? "Upload a stock data sheet above to populate this register"
-                : "Log in to upload stock data"}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap w-14">
-                    Sl No
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
-                    Company &amp; Model
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
-                    CPU Sl No
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
-                    Monitor Sl No
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
-                    AMC Start Date
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
-                    AMC Expiry Date
-                  </TableHead>
-                  <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap">
-                    AMC Team
-                  </TableHead>
-                  {isLoggedIn && (
-                    <TableHead className="font-display text-xs uppercase tracking-wide whitespace-nowrap w-12">
-                      {/* Actions */}
-                    </TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedEntries.map((entry, idx) => (
-                  <TableRow
-                    key={entry.id}
-                    data-ocid={`stock.item.${idx + 1}`}
-                    className="hover:bg-muted/20 transition-colors"
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">Sl No</TableHead>
+                <TableHead>Device Type</TableHead>
+                <TableHead>Serial Number</TableHead>
+                <TableHead>Make &amp; Model</TableHead>
+                <TableHead>Section</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>AMC Team</TableHead>
+                <TableHead>AMC Expiry</TableHead>
+                <TableHead>Remarks</TableHead>
+                {isLoggedIn && <TableHead className="w-20">Actions</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                [1, 2, 3, 4, 5].map((i) => (
+                  <TableRow key={`skel-row-${i}`}>
+                    {(isLoggedIn
+                      ? ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+                      : ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+                    ).map((col) => (
+                      <TableCell key={`skel-${i}-${col}`}>
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : filteredDevices.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={isLoggedIn ? 10 : 9}
+                    className="text-center py-10 text-muted-foreground"
+                    data-ocid="stock.empty_state"
                   >
-                    <TableCell className="text-sm font-mono text-muted-foreground">
-                      {Number(entry.slNo)}
+                    {search
+                      ? "No devices match your search."
+                      : "No devices in stock. Import a CSV or add manually."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredDevices.map((device, idx) => (
+                  <TableRow
+                    key={device.id ?? device.serialNumber ?? idx}
+                    data-ocid={`stock.item.${idx + 1}`}
+                  >
+                    <TableCell className="text-muted-foreground text-sm">
+                      {idx + 1}
                     </TableCell>
-                    <TableCell className="text-sm font-medium text-foreground whitespace-nowrap max-w-[200px] truncate">
-                      {entry.companyAndModel || (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell>
+                      <DeviceTypeBadge type={device.deviceType ?? "Other"} />
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                      {entry.cpuSlNo || (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell className="font-mono text-sm">
+                      {device.serialNumber}
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                      {entry.monitorSlNo || (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell className="text-sm">
+                      {device.makeAndModel ?? device.companyName ?? "—"}
                     </TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {entry.amcStartDate && entry.amcStartDate > BigInt(0) ? (
-                        <span className="text-foreground">
-                          {formatDate(entry.amcStartDate)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell className="text-sm">
+                      {device.sectionId || "—"}
                     </TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      <AmcExpiryBadge date={entry.amcExpiryDate} />
+                    <TableCell>
+                      <StatusBadge status={device.workingStatus ?? "Others"} />
                     </TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {entry.amcTeam || (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell className="text-sm">
+                      {device.amcTeam || "—"}
+                    </TableCell>
+                    <TableCell>
+                      <AmcExpiryBadge
+                        date={device.amcExpiryDate ?? BigInt(0)}
+                      />
+                    </TableCell>
+                    <TableCell className="text-sm max-w-[140px] truncate">
+                      {device.remarks || "—"}
                     </TableCell>
                     {isLoggedIn && (
                       <TableCell>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => openDelete(entry.id)}
-                          data-ocid={`stock.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEditDialog(device)}
+                            data-ocid="stock.edit_button"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => {
+                              setDeletingId(device.id ?? device.serialNumber);
+                              setDeleteDialogOpen(true);
+                            }}
+                            data-ocid="stock.delete_button"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
+
+      {/* Add / Edit Dialog */}
+      <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
+        <DialogContent className="max-w-lg" data-ocid="stock.dialog">
+          <DialogHeader>
+            <DialogTitle>
+              {editingDevice ? "Edit Device" : "Add Device"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            {/* Device Type */}
+            <div className="col-span-2 space-y-1">
+              <Label>Device Type</Label>
+              <Select
+                value={formState.deviceType}
+                onValueChange={(v) =>
+                  setFormState((p) => ({ ...p, deviceType: v }))
+                }
+              >
+                <SelectTrigger data-ocid="stock.select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEVICE_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Serial Number */}
+            <div className="col-span-2 space-y-1">
+              <Label>Serial Number *</Label>
+              <Input
+                value={formState.serialNumber}
+                onChange={(e) =>
+                  setFormState((p) => ({ ...p, serialNumber: e.target.value }))
+                }
+                placeholder="Unique serial number"
+                disabled={!!editingDevice}
+                data-ocid="stock.input"
+              />
+            </div>
+
+            {/* Make and Model */}
+            <div className="col-span-2 space-y-1">
+              <Label>Make and Model</Label>
+              <Input
+                value={formState.makeAndModel}
+                onChange={(e) =>
+                  setFormState((p) => ({ ...p, makeAndModel: e.target.value }))
+                }
+                placeholder="e.g. HP EliteDesk 800 G5"
+              />
+            </div>
+
+            {/* Section */}
+            <div className="space-y-1">
+              <Label>Section</Label>
+              <Input
+                value={formState.section}
+                onChange={(e) =>
+                  setFormState((p) => ({ ...p, section: e.target.value }))
+                }
+                placeholder="e.g. D1"
+              />
+            </div>
+
+            {/* IP Address */}
+            <div className="space-y-1">
+              <Label>IP Address</Label>
+              <Input
+                value={formState.ipAddress}
+                onChange={(e) =>
+                  setFormState((p) => ({ ...p, ipAddress: e.target.value }))
+                }
+                placeholder="Optional"
+              />
+            </div>
+
+            {/* Status */}
+            <div className="col-span-2 space-y-1">
+              <Label>Status</Label>
+              <Select
+                value={formState.status}
+                onValueChange={(v) =>
+                  setFormState((p) => ({ ...p, status: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* AMC Team */}
+            <div className="col-span-2 space-y-1">
+              <Label>AMC Team</Label>
+              <Input
+                value={formState.amcTeam}
+                onChange={(e) =>
+                  setFormState((p) => ({ ...p, amcTeam: e.target.value }))
+                }
+                placeholder="Service provider name"
+              />
+            </div>
+
+            {/* AMC Start Date */}
+            <div className="space-y-1">
+              <Label>AMC Start Date</Label>
+              <Input
+                value={formState.amcStartDate}
+                onChange={(e) =>
+                  setFormState((p) => ({ ...p, amcStartDate: e.target.value }))
+                }
+                placeholder="DD/MM/YYYY"
+              />
+            </div>
+
+            {/* AMC End Date */}
+            <div className="space-y-1">
+              <Label>AMC End Date</Label>
+              <Input
+                value={formState.amcEndDate}
+                onChange={(e) =>
+                  setFormState((p) => ({ ...p, amcEndDate: e.target.value }))
+                }
+                placeholder="DD/MM/YYYY"
+              />
+            </div>
+
+            {/* Remarks */}
+            <div className="col-span-2 space-y-1">
+              <Label>Remarks</Label>
+              <Input
+                value={formState.remarks}
+                onChange={(e) =>
+                  setFormState((p) => ({ ...p, remarks: e.target.value }))
+                }
+                placeholder="Optional notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEntryDialogOpen(false)}
+              data-ocid="stock.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEntry}
+              disabled={isSaving}
+              data-ocid="stock.save_button"
+            >
+              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingDevice ? "Update" : "Add Device"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent data-ocid="stock.dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-display">
-              Delete Stock Entry?
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete Device?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove this entry from the stock register.
-              This action cannot be undone.
+              This will permanently remove the device from stock. This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -773,13 +1060,10 @@ export default function StockData() {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-ocid="stock.confirm_button"
             >
-              {deleteMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

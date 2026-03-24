@@ -284,11 +284,12 @@ export interface backendInterface {
     getComputersBySection(sectionId: string): Promise<Array<Computer>>;
     getComputersWithExpiringAMC(days: bigint): Promise<Array<Computer>>;
     getDashboardStats(): Promise<{
-        totalStandbySystems: bigint;
-        totalComputers: bigint;
-        computersWithExpiringAMC: bigint;
-        openComplaints: bigint;
-        totalSections: bigint;
+        totalSeats: bigint;
+        totalStandbyDevices: bigint;
+        pendingComplaints: bigint;
+        clearedComplaints: bigint;
+        totalOtherDevices: bigint;
+        totalDevices: bigint;
     }>;
     getExpiringAMCParts(days: bigint): Promise<Array<AMCPart>>;
     getSection(id: string): Promise<Section | null>;
@@ -311,6 +312,88 @@ export interface backendInterface {
     getAllMovementLogs(): Promise<Array<MovementLog>>;
 }
 import type { AMCPart as _AMCPart, Complaint as _Complaint, ComplaintStatus as _ComplaintStatus, Computer as _Computer, ExternalBlob as _ExternalBlob, Priority as _Priority, Section as _Section, StandbySystem as _StandbySystem, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
+
+// ── New unified stock types ──────────────────────────────────────────────────
+export interface Device {
+    id: string;
+    serialNumber: string;
+    deviceType: string;
+    makeAndModel: string;
+    companyName: string;
+    amcTeam: string;
+    amcStartDate: bigint;
+    amcExpiryDate: bigint;
+    assignedSeatId: string;
+    sectionId: string;
+    workingStatus: string;
+    ipAddress: string;
+    remarks: string;
+    previousSection: string;
+    dateMovedToStandby: bigint;
+    createdAt: bigint;
+}
+export interface Seat {
+    id: string;
+    sectionId: string;
+    seatNumber: string;
+    currentUser: string;
+    cpuSerial: string;
+    monitorSerial: string;
+    ip1: string;
+    ip2: string;
+    remarks: string;
+    createdAt: bigint;
+}
+export interface StockImportRow {
+    slNo: bigint;
+    companyAndModel: string;
+    cpuSlNo: string;
+    monitorSlNo: string;
+    amcStartDate: bigint;
+    amcExpiryDate: bigint;
+    amcTeam: string;
+}
+// Augment Complaint with new fields (interface merging)
+export interface Complaint {
+    caseLoggedDate?: bigint;
+    serialNumber?: string;
+    remarks1?: string;
+    remarks2?: string;
+}
+// Augment backendInterface with new methods (interface merging)
+export interface backendInterface {
+    createDevice(device: Device): Promise<void>;
+    getDevice(id: string): Promise<Device | null>;
+    getAllDevices(): Promise<Array<Device>>;
+    updateDevice(device: Device): Promise<void>;
+    deleteDevice(id: string): Promise<void>;
+    createSeat(seat: Seat): Promise<void>;
+    getSeat(id: string): Promise<Seat | null>;
+    getAllSeats(): Promise<Array<Seat>>;
+    updateSeat(seat: Seat): Promise<void>;
+    deleteSeat(id: string): Promise<void>;
+    importStockRow(row: StockImportRow): Promise<void>;
+    clearAllData(): Promise<void>;
+}
+
+// ── Complaint Candid helpers (new schema: plain-text status, caseLoggedDate, etc.) ──
+function toComplaintCandid(c: any): any {
+  return {
+    ...c,
+    caseAttendedDate: c.caseAttendedDate != null ? [c.caseAttendedDate] : [],
+    spareTakenDate:   c.spareTakenDate   != null ? [c.spareTakenDate]   : [],
+    caseClearedDate:  c.caseClearedDate  != null ? [c.caseClearedDate]  : [],
+  };
+}
+function fromComplaintCandid(c: any): any {
+  return {
+    ...c,
+    caseAttendedDate: Array.isArray(c.caseAttendedDate) ? (c.caseAttendedDate[0] ?? null) : (c.caseAttendedDate ?? null),
+    spareTakenDate:   Array.isArray(c.spareTakenDate)   ? (c.spareTakenDate[0]   ?? null) : (c.spareTakenDate   ?? null),
+    caseClearedDate:  Array.isArray(c.caseClearedDate)  ? (c.caseClearedDate[0]  ?? null) : (c.caseClearedDate  ?? null),
+  };
+}
+
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
@@ -440,18 +523,11 @@ export class Backend implements backendInterface {
         }
     }
     async createComplaint(arg0: Complaint): Promise<void> {
+        const c = toComplaintCandid(arg0);
         if (this.processError) {
-            try {
-                const result = await this.actor.createComplaint(to_candid_Complaint_n12(this._uploadFile, this._downloadFile, arg0));
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.createComplaint(to_candid_Complaint_n12(this._uploadFile, this._downloadFile, arg0));
-            return result;
-        }
+            try { return await (this.actor as any).createComplaint(c); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).createComplaint(c); }
     }
     async createComputer(arg0: Computer): Promise<void> {
         if (this.processError) {
@@ -623,17 +699,9 @@ export class Backend implements backendInterface {
     }
     async getAllComplaints(): Promise<Array<Complaint>> {
         if (this.processError) {
-            try {
-                const result = await this.actor.getAllComplaints();
-                return from_candid_vec_n32(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getAllComplaints();
-            return from_candid_vec_n32(this._uploadFile, this._downloadFile, result);
-        }
+            try { const r = await (this.actor as any).getAllComplaints(); return r.map(fromComplaintCandid); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { const r = await (this.actor as any).getAllComplaints(); return r.map(fromComplaintCandid); }
     }
     async getAllComputers(): Promise<Array<Computer>> {
         if (this.processError) {
@@ -818,11 +886,12 @@ export class Backend implements backendInterface {
         }
     }
     async getDashboardStats(): Promise<{
-        totalStandbySystems: bigint;
-        totalComputers: bigint;
-        computersWithExpiringAMC: bigint;
-        openComplaints: bigint;
-        totalSections: bigint;
+        totalSeats: bigint;
+        totalStandbyDevices: bigint;
+        pendingComplaints: bigint;
+        clearedComplaints: bigint;
+        totalOtherDevices: bigint;
+        totalDevices: bigint;
     }> {
         if (this.processError) {
             try {
@@ -950,18 +1019,11 @@ export class Backend implements backendInterface {
         }
     }
     async updateComplaint(arg0: Complaint): Promise<void> {
+        const c = toComplaintCandid(arg0);
         if (this.processError) {
-            try {
-                const result = await this.actor.updateComplaint(to_candid_Complaint_n12(this._uploadFile, this._downloadFile, arg0));
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.updateComplaint(to_candid_Complaint_n12(this._uploadFile, this._downloadFile, arg0));
-            return result;
-        }
+            try { return await (this.actor as any).updateComplaint(c); }
+            catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).updateComplaint(c); }
     }
     async updateComputer(arg0: Computer): Promise<void> {
         if (this.processError) {
@@ -1054,6 +1116,44 @@ export class Backend implements backendInterface {
             try { return await (this.actor as any).getAllMovementLogs(); }
             catch (e) { this.processError(e); throw new Error("unreachable"); }
         } else { return await (this.actor as any).getAllMovementLogs(); }
+    }
+    async createDevice(arg0: Device): Promise<void> {
+        return await (this.actor as any).createDevice(arg0);
+    }
+    async getDevice(arg0: string): Promise<Device | null> {
+        const result = await (this.actor as any).getDevice(arg0);
+        return result.length === 0 ? null : result[0];
+    }
+    async getAllDevices(): Promise<Array<Device>> {
+        return await (this.actor as any).getAllDevices();
+    }
+    async updateDevice(arg0: Device): Promise<void> {
+        return await (this.actor as any).updateDevice(arg0);
+    }
+    async deleteDevice(arg0: string): Promise<void> {
+        return await (this.actor as any).deleteDevice(arg0);
+    }
+    async createSeat(arg0: Seat): Promise<void> {
+        return await (this.actor as any).createSeat(arg0);
+    }
+    async getSeat(arg0: string): Promise<Seat | null> {
+        const result = await (this.actor as any).getSeat(arg0);
+        return result.length === 0 ? null : result[0];
+    }
+    async getAllSeats(): Promise<Array<Seat>> {
+        return await (this.actor as any).getAllSeats();
+    }
+    async updateSeat(arg0: Seat): Promise<void> {
+        return await (this.actor as any).updateSeat(arg0);
+    }
+    async deleteSeat(arg0: string): Promise<void> {
+        return await (this.actor as any).deleteSeat(arg0);
+    }
+    async importStockRow(arg0: StockImportRow): Promise<void> {
+        return await (this.actor as any).importStockRow(arg0);
+    }
+    async clearAllData(): Promise<void> {
+        return await (this.actor as any).clearAllData();
     }
 }
 function from_candid_AMCPart_n27(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _AMCPart): AMCPart {

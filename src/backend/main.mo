@@ -2,226 +2,226 @@ import Map "mo:core/Map";
 import Time "mo:core/Time";
 import Text "mo:core/Text";
 import Principal "mo:core/Principal";
+import AccessControl "authorization/access-control";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
-import AccessControl "authorization/access-control";
 
 actor {
+  // Keep blob-storage and access-control includes for upgrade compatibility
+  include MixinStorage();
   let accessControlState = AccessControl.initState();
 
-  include MixinStorage();
+  // ── Old types (migration stubs, kept for stable-memory compatibility) ──────
 
-  // Types
-  type Section = {
-    id : Text;
-    name : Text;
-    description : Text;
-    location : Text;
-    createdAt : Int;
-  };
-
-  type Computer = {
-    id : Text;
-    sectionId : Text;
-    seatNumber : Text;
-    currentUser : Text;
-    serialNumber : Text;
-    model : Text;
-    brand : Text;
-    purchaseDate : Int;
-    amcStartDate : Int;
-    amcEndDate : Int;
+  type OldComputer = {
+    id : Text; sectionId : Text; seatNumber : Text; currentUser : Text;
+    serialNumber : Text; model : Text; brand : Text; purchaseDate : Int;
+    amcStartDate : Int; amcEndDate : Int;
     status : { #active; #standby; #retired };
     datasheetBlob : ?Storage.ExternalBlob;
-    notes : Text;
-    createdAt : Int;
-    monitorSerial : Text;
-    monitorModel : Text;
-    ip1 : Text;
-    ip2 : Text;
-    remarks : Text;
-    companyName : Text;
-    amcCompany : Text;
+    notes : Text; createdAt : Int; monitorSerial : Text; monitorModel : Text;
+    ip1 : Text; ip2 : Text; remarks : Text; companyName : Text; amcCompany : Text;
   };
 
-  type StandbySystem = {
-    id : Text;
-    serialNumber : Text;
-    model : Text;
-    brand : Text;
+  type OldStandbySystem = {
+    id : Text; serialNumber : Text; model : Text; brand : Text;
     condition : { #good; #fair; #poor };
     status : { #available; #inUse; #retired };
-    assignedSectionId : ?Text;
-    notes : Text;
+    assignedSectionId : ?Text; notes : Text; createdAt : Int;
+  };
+
+  type OldAMCPart = {
+    id : Text; partName : Text; partNumber : Text; quantity : Nat;
+    associatedComputerId : ?Text; associatedSectionId : ?Text;
+    supplier : Text; purchaseDate : Int; warrantyExpiry : ?Int;
+    notes : Text; createdAt : Int;
+  };
+
+  type OldStockEntry = {
+    id : Text; slNo : Nat; companyAndModel : Text; cpuSlNo : Text;
+    monitorSlNo : Text; amcStartDate : Int; amcExpiryDate : Int;
+    amcTeam : Text; createdAt : Int;
+  };
+
+  type OldOtherDevice = {
+    id : Text; slNo : Nat; unitArticle : Text; makeAndModel : Text;
+    serialNumber : Text; section : Text; ipAddress : Text;
+    workingStatus : Text; remarks : Text; createdAt : Int;
+  };
+
+  // Old Complaint type (kept as-is to match stable memory)
+  type OldComplaint = {
+    id : Text; computerId : ?Text; sectionId : ?Text;
+    reportedBy : Text; description : Text;
+    status : { #open; #inProgress; #resolved };
+    priority : { #low; #medium; #high };
+    createdAt : Int; resolvedAt : ?Int;
+    unitSlNo : Text; unit : Text;
+    caseAttendedDate : ?Int; sparesTaken : Text;
+    spareTakenDate : ?Int; caseClearedDate : ?Int;
+    amcTeam : Text; extraCol1 : Text; extraCol2 : Text;
+  };
+
+  // ── Active types ────────────────────────────────────────────────────────
+
+  // Section keeps `location` field for backward compat with stable memory
+  type Section = {
+    id : Text; name : Text; description : Text;
+    location : Text;  // kept for compat
     createdAt : Int;
   };
 
-  type ComplaintStatus = { #open; #inProgress; #resolved };
-  type Priority = { #low; #medium; #high };
-
+  // New Complaint (stored under different stable var name)
   type Complaint = {
     id : Text;
-    computerId : ?Text;
-    sectionId : ?Text;
-    reportedBy : Text;
-    description : Text;
-    status : ComplaintStatus;
-    priority : Priority;
-    createdAt : Int;
-    resolvedAt : ?Int;
     unitSlNo : Text;
     unit : Text;
+    serialNumber : Text;
+    reportedBy : Text;
+    amcTeam : Text;
+    caseLoggedDate : Int;
     caseAttendedDate : ?Int;
     sparesTaken : Text;
     spareTakenDate : ?Int;
     caseClearedDate : ?Int;
-    amcTeam : Text;
-    extraCol1 : Text;
-    extraCol2 : Text;
-  };
-
-  type AMCPart = {
-    id : Text;
-    partName : Text;
-    partNumber : Text;
-    quantity : Nat;
-    associatedComputerId : ?Text;
-    associatedSectionId : ?Text;
-    supplier : Text;
-    purchaseDate : Int;
-    warrantyExpiry : ?Int;
-    notes : Text;
+    status : Text;   // Pending | Cleared | LongPending
+    remarks1 : Text;
+    remarks2 : Text;
     createdAt : Int;
   };
 
-  public type UserProfile = {
-    name : Text;
-  };
-
-  type StockEntry = {
+  type Device = {
     id : Text;
-    slNo : Nat;
-    companyAndModel : Text;
-    cpuSlNo : Text;
-    monitorSlNo : Text;
+    serialNumber : Text;
+    deviceType : Text;
+    makeAndModel : Text;
+    companyName : Text;
+    amcTeam : Text;
     amcStartDate : Int;
     amcExpiryDate : Int;
-    amcTeam : Text;
+    assignedSeatId : Text;
+    sectionId : Text;
+    workingStatus : Text;
+    ipAddress : Text;
+    remarks : Text;
+    previousSection : Text;
+    dateMovedToStandby : Int;
     createdAt : Int;
   };
 
-  type OtherDevice = {
+  type Seat = {
     id : Text;
-    slNo : Nat;
-    unitArticle : Text;
-    makeAndModel : Text;
-    serialNumber : Text;
-    section : Text;
-    ipAddress : Text;
-    workingStatus : Text;
+    sectionId : Text;
+    seatNumber : Text;
+    currentUser : Text;
+    cpuSerial : Text;
+    monitorSerial : Text;
+    ip1 : Text;
+    ip2 : Text;
     remarks : Text;
     createdAt : Int;
   };
 
   type MovementLog = {
-    id : Text;
-    dateTime : Int;
-    deviceType : Text;  // "CPU" | "Monitor"
-    serialNumber : Text;
-    action : Text;      // "assigned" | "removed" | "movedToStandby" | "assignedFromStandby" | "replaced" | "sectionTransfer"
-    previousSection : Text;
-    newSection : Text;
-    triggeredFrom : Text; // "Computers Page" | "Standby Systems Page" | "Data Import"
-    user : Text;
-    remarks : Text;
+    id : Text; dateTime : Int; deviceType : Text; serialNumber : Text;
+    action : Text; previousSection : Text; newSection : Text;
+    triggeredFrom : Text; user : Text; remarks : Text;
   };
 
-  type ProcessStockEntriesResult = {
-    updated : Nat;
-    addedToStandby : Nat;
+  type StockImportRow = {
+    slNo : Nat; companyAndModel : Text; cpuSlNo : Text; monitorSlNo : Text;
+    amcStartDate : Int; amcExpiryDate : Int; amcTeam : Text;
   };
 
-  // ── Stable storage arrays (survive upgrades) ──────────────────────────────
-  stable var sectionsStable       : [(Text, Section)]       = [];
-  stable var computersStable      : [(Text, Computer)]      = [];
-  stable var standbyStable        : [(Text, StandbySystem)] = [];
-  stable var complaintsStable     : [(Text, Complaint)]     = [];
-  stable var amcPartsStable       : [(Text, AMCPart)]       = [];
-  stable var stockEntriesStable   : [(Text, StockEntry)]    = [];
+  public type UserProfile = { name : Text };
+
+  // ── Stable storage – migration stubs (absorb old data, cleared on upgrade) ─
+  stable var computersStable      : [(Text, OldComputer)]      = [];
+  stable var standbyStable        : [(Text, OldStandbySystem)] = [];
+  stable var amcPartsStable       : [(Text, OldAMCPart)]       = [];
+  stable var stockEntriesStable   : [(Text, OldStockEntry)]    = [];
+  stable var otherDevicesStable   : [(Text, OldOtherDevice)]   = [];
+  stable var complaintsStable     : [(Text, OldComplaint)]     = [];
+
+  // ── Stable storage – active data ───────────────────────────────────────
+  stable var sectionsStable       : [(Text, Section)]   = [];
+  stable var newComplaintsStable  : [(Text, Complaint)]  = [];
+  stable var devicesStable        : [(Text, Device)]     = [];
+  stable var seatsStable          : [(Text, Seat)]       = [];
+  stable var movementLogsStable   : [(Text, MovementLog)] = [];
   stable var userProfilesStable   : [(Principal, UserProfile)] = [];
-  stable var otherDevicesStable   : [(Text, OtherDevice)]   = [];
-  stable var movementLogsStable   : [(Text, MovementLog)]   = [];
 
-  // ── In-memory maps ────────────────────────────────────────────────────────
-  let sections      = Map.fromIter<Text, Section>(sectionsStable.vals());
-  let computers     = Map.fromIter<Text, Computer>(computersStable.vals());
-  let standbySystems = Map.fromIter<Text, StandbySystem>(standbyStable.vals());
-  let complaints    = Map.fromIter<Text, Complaint>(complaintsStable.vals());
-  let amcParts      = Map.fromIter<Text, AMCPart>(amcPartsStable.vals());
-  let stockEntries  = Map.fromIter<Text, StockEntry>(stockEntriesStable.vals());
-  let userProfiles  = Map.fromIter<Principal, UserProfile>(userProfilesStable.vals());
-  let otherDevices  = Map.fromIter<Text, OtherDevice>(otherDevicesStable.vals());
-  let movementLogs  = Map.fromIter<Text, MovementLog>(movementLogsStable.vals());
+  // ── In-memory maps – migration stubs ──────────────────────────────────
+  let computers      = Map.fromIter<Text, OldComputer>(computersStable.vals());
+  let standbySystems = Map.fromIter<Text, OldStandbySystem>(standbyStable.vals());
+  let amcParts       = Map.fromIter<Text, OldAMCPart>(amcPartsStable.vals());
+  let stockEntries   = Map.fromIter<Text, OldStockEntry>(stockEntriesStable.vals());
+  let otherDevices   = Map.fromIter<Text, OldOtherDevice>(otherDevicesStable.vals());
+  let complaints     = Map.fromIter<Text, OldComplaint>(complaintsStable.vals());
+
+  // ── In-memory maps – active ────────────────────────────────────────────
+  let sections       = Map.fromIter<Text, Section>(sectionsStable.vals());
+  let complaintStore = Map.fromIter<Text, Complaint>(newComplaintsStable.vals());
+  let devices        = Map.fromIter<Text, Device>(devicesStable.vals());
+  let seats          = Map.fromIter<Text, Seat>(seatsStable.vals());
+  let movementLogs   = Map.fromIter<Text, MovementLog>(movementLogsStable.vals());
+  let userProfiles   = Map.fromIter<Principal, UserProfile>(userProfilesStable.vals());
 
   // ── Upgrade hooks ─────────────────────────────────────────────────────────
   system func preupgrade() {
-    sectionsStable     := sections.entries().toArray();
-    computersStable    := computers.entries().toArray();
-    standbyStable      := standbySystems.entries().toArray();
-    complaintsStable   := complaints.entries().toArray();
-    amcPartsStable     := amcParts.entries().toArray();
-    stockEntriesStable := stockEntries.entries().toArray();
-    userProfilesStable := userProfiles.entries().toArray();
-    otherDevicesStable := otherDevices.entries().toArray();
-    movementLogsStable := movementLogs.entries().toArray();
+    // Clear migration stubs (discard old data – user requested clean slate)
+    computersStable    := [];
+    standbyStable      := [];
+    amcPartsStable     := [];
+    stockEntriesStable := [];
+    otherDevicesStable := [];
+    complaintsStable   := [];
+    // Persist active data
+    sectionsStable      := sections.entries().toArray();
+    newComplaintsStable := complaintStore.entries().toArray();
+    devicesStable       := devices.entries().toArray();
+    seatsStable         := seats.entries().toArray();
+    movementLogsStable  := movementLogs.entries().toArray();
+    userProfilesStable  := userProfiles.entries().toArray();
   };
 
   system func postupgrade() {
-    sectionsStable     := [];
     computersStable    := [];
     standbyStable      := [];
-    complaintsStable   := [];
     amcPartsStable     := [];
     stockEntriesStable := [];
-    userProfilesStable := [];
     otherDevicesStable := [];
-    movementLogsStable := [];
+    complaintsStable   := [];
+    sectionsStable      := [];
+    newComplaintsStable := [];
+    devicesStable       := [];
+    seatsStable         := [];
+    movementLogsStable  := [];
+    userProfilesStable  := [];
   };
 
-  // ── Helper: add movement log entry ────────────────────────────────────────
-  func addMovementLog(
-    deviceType : Text,
-    serialNumber : Text,
-    action : Text,
-    previousSection : Text,
-    newSection : Text,
-    triggeredFrom : Text,
-    user : Text,
-    remarks : Text,
+  // ── Internal helpers ─────────────────────────────────────────────────────
+  func logMovement(
+    deviceType : Text, serialNumber : Text, action : Text,
+    previousSection : Text, newSection : Text,
+    triggeredFrom : Text, user : Text, remarks : Text,
   ) {
-    let id = serialNumber # "_" # action # "_" # Time.now().toText();
-    let entry : MovementLog = {
-      id;
-      dateTime = Time.now();
-      deviceType;
-      serialNumber;
-      action;
-      previousSection;
-      newSection;
-      triggeredFrom;
-      user;
-      remarks;
-    };
-    movementLogs.add(id, entry);
+    let now = Time.now();
+    let id = serialNumber # "_" # action # "_" # now.toText();
+    movementLogs.add(id, {
+      id; dateTime = now; deviceType; serialNumber; action;
+      previousSection; newSection; triggeredFrom; user; remarks;
+    });
   };
 
-  // Section CRUD
+  func getDeviceBySerial(serial : Text) : ?Device {
+    if (serial == "") return null;
+    devices.get(serial);
+  };
+
+  // ── Section CRUD ─────────────────────────────────────────────────────────
   public shared func createSection(section : Section) : async () {
     sections.add(section.id, section);
-  };
-
-  public query func getSection(id : Text) : async ?Section {
-    sections.get(id);
   };
 
   public query func getAllSections() : async [Section] {
@@ -229,408 +229,244 @@ actor {
   };
 
   public shared func updateSection(section : Section) : async () {
-    switch (sections.get(section.id)) {
-      case (null) {};
-      case (?_) { sections.add(section.id, section) };
-    };
+    sections.add(section.id, section);
   };
 
   public shared func deleteSection(id : Text) : async () {
-    switch (sections.get(id)) {
-      case (null) {};
-      case (?_) { sections.remove(id) };
+    ignore sections.remove(id);
+  };
+
+  // ── Device CRUD ──────────────────────────────────────────────────────────
+  public shared func createDevice(device : Device) : async () {
+    devices.add(device.id, device);
+  };
+
+  public query func getDevice(id : Text) : async ?Device {
+    devices.get(id);
+  };
+
+  public query func getAllDevices() : async [Device] {
+    devices.values().toArray();
+  };
+
+  public shared func updateDevice(device : Device) : async () {
+    devices.add(device.id, device);
+  };
+
+  public shared func deleteDevice(id : Text) : async () {
+    ignore devices.remove(id);
+  };
+
+  // ── Seat CRUD (with auto device assignment logic) ─────────────────────────
+  public shared func createSeat(seat : Seat) : async () {
+    if (seat.cpuSerial != "") {
+      switch (getDeviceBySerial(seat.cpuSerial)) {
+        case (?dev) {
+          devices.add(dev.id, { dev with
+            assignedSeatId = seat.id; sectionId = seat.sectionId;
+            workingStatus = "Working"; dateMovedToStandby = 0;
+          });
+          logMovement("CPU", seat.cpuSerial, "assigned", "", seat.sectionId, "Computers Page", "", "Assigned to seat " # seat.seatNumber);
+        };
+        case (null) {};
+      };
     };
+    if (seat.monitorSerial != "") {
+      switch (getDeviceBySerial(seat.monitorSerial)) {
+        case (?dev) {
+          devices.add(dev.id, { dev with
+            assignedSeatId = seat.id; sectionId = seat.sectionId;
+            workingStatus = "Working"; dateMovedToStandby = 0;
+          });
+          logMovement("Monitor", seat.monitorSerial, "assigned", "", seat.sectionId, "Computers Page", "", "Assigned to seat " # seat.seatNumber);
+        };
+        case (null) {};
+      };
+    };
+    seats.add(seat.id, seat);
   };
 
-  // Computer CRUD
-  public shared func createComputer(computer : Computer) : async () {
-    computers.add(computer.id, computer);
+  public query func getSeat(id : Text) : async ?Seat {
+    seats.get(id);
   };
 
-  public query func getComputer(id : Text) : async ?Computer {
-    computers.get(id);
+  public query func getAllSeats() : async [Seat] {
+    seats.values().toArray();
   };
 
-  public query func getAllComputers() : async [Computer] {
-    computers.values().toArray();
-  };
-
-  public query func getComputersBySection(sectionId : Text) : async [Computer] {
-    computers.values().toArray().filter(func(c) { c.sectionId == sectionId });
-  };
-
-  public query func getComputersWithExpiringAMC(days : Int) : async [Computer] {
-    let now = Time.now();
-    let expiryThreshold = now + (days * 24 * 3600 * 1000000000);
-    computers.values().toArray().filter(func(c) {
-      c.amcEndDate <= expiryThreshold
-    });
-  };
-
-  public shared func updateComputer(computer : Computer) : async () {
-    switch (computers.get(computer.id)) {
-      case (null) {};
+  public shared func updateSeat(seat : Seat) : async () {
+    switch (seats.get(seat.id)) {
+      case (null) { seats.add(seat.id, seat) };
       case (?old) {
         // CPU serial changed
-        if (old.serialNumber != "" and old.serialNumber != computer.serialNumber) {
-          let cpuInUse = computers.values().toArray().find(func(c) {
-            c.id != computer.id and c.serialNumber == old.serialNumber
-          });
-          switch (cpuInUse) {
-            case (null) {
-              let alreadyInStandby = standbySystems.values().toArray().find(func(s) {
-                s.serialNumber == old.serialNumber
-              });
-              switch (alreadyInStandby) {
-                case (null) {
-                  let newStandby : StandbySystem = {
-                    id = old.serialNumber # "_cpu_standby";
-                    serialNumber = old.serialNumber;
-                    model = old.model;
-                    brand = old.brand;
-                    condition = #good;
-                    status = #available;
-                    assignedSectionId = null;
-                    notes = "Auto-moved from section " # old.sectionId;
-                    createdAt = Time.now();
-                  };
-                  standbySystems.add(newStandby.id, newStandby);
-                  addMovementLog("CPU", old.serialNumber, "movedToStandby", old.sectionId, "Standby", "Computers Page", "", "Auto-moved on CPU replacement");
-                };
-                case (?_) {};
+        if (old.cpuSerial != seat.cpuSerial) {
+          if (old.cpuSerial != "") {
+            switch (getDeviceBySerial(old.cpuSerial)) {
+              case (?dev) {
+                devices.add(dev.id, { dev with
+                  assignedSeatId = ""; previousSection = old.sectionId;
+                  dateMovedToStandby = Time.now(); workingStatus = "Available";
+                });
+                logMovement("CPU", old.cpuSerial, "movedToStandby", old.sectionId, "Standby", "Computers Page", "", "CPU replaced");
               };
+              case (null) {};
             };
-            case (?_) {};
           };
-          // Log removal of old CPU from seat
-          addMovementLog("CPU", old.serialNumber, "removed", old.sectionId, "", "Computers Page", "", "Replaced by " # computer.serialNumber);
-        };
-        // Remove new CPU serial from standby if present
-        if (computer.serialNumber != "") {
-          switch (standbySystems.values().toArray().find(func(s) { s.serialNumber == computer.serialNumber })) {
+          if (seat.cpuSerial != "") {
+            switch (getDeviceBySerial(seat.cpuSerial)) {
+              case (?dev) {
+                let wasStandby = dev.assignedSeatId == "";
+                devices.add(dev.id, { dev with
+                  assignedSeatId = seat.id; sectionId = seat.sectionId;
+                  workingStatus = "Working"; dateMovedToStandby = 0;
+                });
+                let action = if (wasStandby) "assignedFromStandby" else "assigned";
+                logMovement("CPU", seat.cpuSerial, action, dev.sectionId, seat.sectionId, "Computers Page", "", "Assigned to seat " # seat.seatNumber);
+              };
+              case (null) {};
+            };
+          };
+        } else if (old.cpuSerial != "" and old.sectionId != seat.sectionId) {
+          switch (getDeviceBySerial(old.cpuSerial)) {
+            case (?dev) {
+              devices.add(dev.id, { dev with sectionId = seat.sectionId });
+              logMovement("CPU", old.cpuSerial, "sectionTransfer", old.sectionId, seat.sectionId, "Computers Page", "", "");
+            };
             case (null) {};
-            case (?s) {
-              standbySystems.remove(s.id);
-              addMovementLog("CPU", computer.serialNumber, "assignedFromStandby", "Standby", computer.sectionId, "Computers Page", "", "Assigned to seat " # computer.seatNumber);
-            };
           };
-        };
-        // Log new CPU assignment if serial changed
-        if (old.serialNumber != computer.serialNumber and computer.serialNumber != "") {
-          addMovementLog("CPU", computer.serialNumber, "assigned", old.sectionId, computer.sectionId, "Computers Page", "", "Assigned to seat " # computer.seatNumber);
-        };
-        // Section transfer (same serial, different section)
-        if (old.serialNumber != "" and old.serialNumber == computer.serialNumber and old.sectionId != computer.sectionId) {
-          addMovementLog("CPU", computer.serialNumber, "sectionTransfer", old.sectionId, computer.sectionId, "Computers Page", "", "");
         };
 
         // Monitor serial changed
-        if (old.monitorSerial != "" and old.monitorSerial != computer.monitorSerial) {
-          let monInUse = computers.values().toArray().find(func(c) {
-            c.id != computer.id and c.monitorSerial == old.monitorSerial
-          });
-          switch (monInUse) {
-            case (null) {
-              let alreadyInStandby = standbySystems.values().toArray().find(func(s) {
-                s.serialNumber == old.monitorSerial
-              });
-              switch (alreadyInStandby) {
-                case (null) {
-                  let newMonStandby : StandbySystem = {
-                    id = old.monitorSerial # "_mon_standby";
-                    serialNumber = old.monitorSerial;
-                    model = old.monitorModel;
-                    brand = old.brand;
-                    condition = #good;
-                    status = #available;
-                    assignedSectionId = null;
-                    notes = "Auto-moved monitor from section " # old.sectionId;
-                    createdAt = Time.now();
-                  };
-                  standbySystems.add(newMonStandby.id, newMonStandby);
-                  addMovementLog("Monitor", old.monitorSerial, "movedToStandby", old.sectionId, "Standby", "Computers Page", "", "Auto-moved on monitor replacement");
-                };
-                case (?_) {};
+        if (old.monitorSerial != seat.monitorSerial) {
+          if (old.monitorSerial != "") {
+            switch (getDeviceBySerial(old.monitorSerial)) {
+              case (?dev) {
+                devices.add(dev.id, { dev with
+                  assignedSeatId = ""; previousSection = old.sectionId;
+                  dateMovedToStandby = Time.now(); workingStatus = "Available";
+                });
+                logMovement("Monitor", old.monitorSerial, "movedToStandby", old.sectionId, "Standby", "Computers Page", "", "Monitor replaced");
               };
+              case (null) {};
             };
-            case (?_) {};
           };
-          addMovementLog("Monitor", old.monitorSerial, "removed", old.sectionId, "", "Computers Page", "", "Replaced by " # computer.monitorSerial);
-        };
-        // Remove new monitor serial from standby if present
-        if (computer.monitorSerial != "") {
-          switch (standbySystems.values().toArray().find(func(s) { s.serialNumber == computer.monitorSerial })) {
+          if (seat.monitorSerial != "") {
+            switch (getDeviceBySerial(seat.monitorSerial)) {
+              case (?dev) {
+                let wasStandby = dev.assignedSeatId == "";
+                devices.add(dev.id, { dev with
+                  assignedSeatId = seat.id; sectionId = seat.sectionId;
+                  workingStatus = "Working"; dateMovedToStandby = 0;
+                });
+                let action = if (wasStandby) "assignedFromStandby" else "assigned";
+                logMovement("Monitor", seat.monitorSerial, action, dev.sectionId, seat.sectionId, "Computers Page", "", "Assigned to seat " # seat.seatNumber);
+              };
+              case (null) {};
+            };
+          };
+        } else if (old.monitorSerial != "" and old.sectionId != seat.sectionId) {
+          switch (getDeviceBySerial(old.monitorSerial)) {
+            case (?dev) {
+              devices.add(dev.id, { dev with sectionId = seat.sectionId });
+              logMovement("Monitor", old.monitorSerial, "sectionTransfer", old.sectionId, seat.sectionId, "Computers Page", "", "");
+            };
             case (null) {};
-            case (?s) {
-              standbySystems.remove(s.id);
-              addMovementLog("Monitor", computer.monitorSerial, "assignedFromStandby", "Standby", computer.sectionId, "Computers Page", "", "Assigned to seat " # computer.seatNumber);
-            };
           };
-        };
-        if (old.monitorSerial != computer.monitorSerial and computer.monitorSerial != "") {
-          addMovementLog("Monitor", computer.monitorSerial, "assigned", old.sectionId, computer.sectionId, "Computers Page", "", "Assigned to seat " # computer.seatNumber);
-        };
-        if (old.monitorSerial != "" and old.monitorSerial == computer.monitorSerial and old.sectionId != computer.sectionId) {
-          addMovementLog("Monitor", computer.monitorSerial, "sectionTransfer", old.sectionId, computer.sectionId, "Computers Page", "", "");
         };
 
-        computers.add(computer.id, computer);
+        seats.add(seat.id, seat);
       };
     };
   };
 
-  public shared func deleteComputer(id : Text) : async () {
-    switch (computers.get(id)) {
+  public shared func deleteSeat(id : Text) : async () {
+    switch (seats.get(id)) {
       case (null) {};
-      case (?_) { computers.remove(id) };
+      case (?seat) {
+        if (seat.cpuSerial != "") {
+          switch (getDeviceBySerial(seat.cpuSerial)) {
+            case (?dev) {
+              devices.add(dev.id, { dev with
+                assignedSeatId = ""; previousSection = seat.sectionId;
+                dateMovedToStandby = Time.now(); workingStatus = "Available";
+              });
+              logMovement("CPU", seat.cpuSerial, "movedToStandby", seat.sectionId, "Standby", "Computers Page", "", "Seat deleted");
+            };
+            case (null) {};
+          };
+        };
+        if (seat.monitorSerial != "") {
+          switch (getDeviceBySerial(seat.monitorSerial)) {
+            case (?dev) {
+              devices.add(dev.id, { dev with
+                assignedSeatId = ""; previousSection = seat.sectionId;
+                dateMovedToStandby = Time.now(); workingStatus = "Available";
+              });
+              logMovement("Monitor", seat.monitorSerial, "movedToStandby", seat.sectionId, "Standby", "Computers Page", "", "Seat deleted");
+            };
+            case (null) {};
+          };
+        };
+        ignore seats.remove(id);
+      };
     };
   };
 
-  // StandbySystem CRUD
-  public shared func createStandbySystem(standbySystem : StandbySystem) : async () {
-    standbySystems.add(standbySystem.id, standbySystem);
-  };
-
-  public query func getStandbySystem(id : Text) : async ?StandbySystem {
-    standbySystems.get(id);
-  };
-
-  public query func getAllStandbySystems() : async [StandbySystem] {
-    standbySystems.values().toArray();
-  };
-
-  public shared func updateStandbySystem(standbySystem : StandbySystem) : async () {
-    switch (standbySystems.get(standbySystem.id)) {
-      case (null) {};
-      case (?_) { standbySystems.add(standbySystem.id, standbySystem) };
+  // ── Stock Import ─────────────────────────────────────────────────────────
+  public shared func importStockRow(row : StockImportRow) : async () {
+    let now = Time.now();
+    if (row.cpuSlNo != "") {
+      let existing = devices.get(row.cpuSlNo);
+      devices.add(row.cpuSlNo, {
+        id = row.cpuSlNo; serialNumber = row.cpuSlNo; deviceType = "CPU";
+        makeAndModel = row.companyAndModel; companyName = row.companyAndModel;
+        amcTeam = row.amcTeam; amcStartDate = row.amcStartDate; amcExpiryDate = row.amcExpiryDate;
+        assignedSeatId = switch (existing) { case (?d) d.assignedSeatId; case null "" };
+        sectionId = switch (existing) { case (?d) d.sectionId; case null "" };
+        workingStatus = switch (existing) { case (?d) d.workingStatus; case null "Available" };
+        ipAddress = switch (existing) { case (?d) d.ipAddress; case null "" };
+        remarks = switch (existing) { case (?d) d.remarks; case null "" };
+        previousSection = switch (existing) { case (?d) d.previousSection; case null "" };
+        dateMovedToStandby = switch (existing) { case (?d) d.dateMovedToStandby; case null 0 };
+        createdAt = switch (existing) { case (?d) d.createdAt; case null now };
+      });
+    };
+    if (row.monitorSlNo != "") {
+      let existing = devices.get(row.monitorSlNo);
+      devices.add(row.monitorSlNo, {
+        id = row.monitorSlNo; serialNumber = row.monitorSlNo; deviceType = "Monitor";
+        makeAndModel = row.companyAndModel; companyName = row.companyAndModel;
+        amcTeam = row.amcTeam; amcStartDate = row.amcStartDate; amcExpiryDate = row.amcExpiryDate;
+        assignedSeatId = switch (existing) { case (?d) d.assignedSeatId; case null "" };
+        sectionId = switch (existing) { case (?d) d.sectionId; case null "" };
+        workingStatus = switch (existing) { case (?d) d.workingStatus; case null "Available" };
+        ipAddress = switch (existing) { case (?d) d.ipAddress; case null "" };
+        remarks = switch (existing) { case (?d) d.remarks; case null "" };
+        previousSection = switch (existing) { case (?d) d.previousSection; case null "" };
+        dateMovedToStandby = switch (existing) { case (?d) d.dateMovedToStandby; case null 0 };
+        createdAt = switch (existing) { case (?d) d.createdAt; case null now };
+      });
     };
   };
 
-  public shared func deleteStandbySystem(id : Text) : async () {
-    switch (standbySystems.get(id)) {
-      case (null) {};
-      case (?_) { standbySystems.remove(id) };
-    };
-  };
-
-  // Complaint CRUD
+  // ── Complaint CRUD ────────────────────────────────────────────────────────
   public shared func createComplaint(complaint : Complaint) : async () {
-    complaints.add(complaint.id, complaint);
-  };
-
-  public query func getComplaint(id : Text) : async ?Complaint {
-    complaints.get(id);
+    complaintStore.add(complaint.id, complaint);
   };
 
   public query func getAllComplaints() : async [Complaint] {
-    complaints.values().toArray();
-  };
-
-  public query func getComplaintsByStatus(status : ComplaintStatus) : async [Complaint] {
-    complaints.values().toArray().filter(func(c) { c.status == status });
-  };
-
-  public query func getComplaintsBySection(sectionId : Text) : async [Complaint] {
-    complaints.values().toArray().filter(func(c) {
-      switch (c.sectionId) {
-        case (null) { false };
-        case (?id) { id == sectionId };
-      }
-    });
-  };
-
-  public query func getComplaintsByComputer(computerId : Text) : async [Complaint] {
-    complaints.values().toArray().filter(func(c) {
-      switch (c.computerId) {
-        case (null) { false };
-        case (?id) { id == computerId };
-      }
-    });
+    complaintStore.values().toArray();
   };
 
   public shared func updateComplaint(complaint : Complaint) : async () {
-    switch (complaints.get(complaint.id)) {
-      case (null) {};
-      case (?_) { complaints.add(complaint.id, complaint) };
-    };
+    complaintStore.add(complaint.id, complaint);
   };
 
   public shared func deleteComplaint(id : Text) : async () {
-    switch (complaints.get(id)) {
-      case (null) {};
-      case (?_) { complaints.remove(id) };
-    };
+    ignore complaintStore.remove(id);
   };
 
-  // AMCPart CRUD
-  public shared func createAMCPart(part : AMCPart) : async () {
-    amcParts.add(part.id, part);
-  };
-
-  public query func getAMCPart(id : Text) : async ?AMCPart {
-    amcParts.get(id);
-  };
-
-  public query func getAllAMCParts() : async [AMCPart] {
-    amcParts.values().toArray();
-  };
-
-  public query func getExpiringAMCParts(days : Int) : async [AMCPart] {
-    let now = Time.now();
-    let expiryThreshold = now + (days * 24 * 3600 * 1000000000);
-    amcParts.values().toArray().filter(func(p) {
-      switch (p.warrantyExpiry) {
-        case (null) { false };
-        case (?expiry) { expiry <= expiryThreshold };
-      }
-    });
-  };
-
-  public shared func updateAMCPart(part : AMCPart) : async () {
-    switch (amcParts.get(part.id)) {
-      case (null) {};
-      case (?_) { amcParts.add(part.id, part) };
-    };
-  };
-
-  public shared func deleteAMCPart(id : Text) : async () {
-    switch (amcParts.get(id)) {
-      case (null) {};
-      case (?_) { amcParts.remove(id) };
-    };
-  };
-
-  // User Profile Management
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    userProfiles.get(caller);
-  };
-
-  public query func getUserProfile(user : Principal) : async ?UserProfile {
-    userProfiles.get(user);
-  };
-
-  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    userProfiles.add(caller, profile);
-  };
-
-  // StockEntry CRUD
-  public shared func createStockEntry(entry : StockEntry) : async () {
-    stockEntries.add(entry.id, entry);
-  };
-
-  public query func getAllStockEntries() : async [StockEntry] {
-    stockEntries.values().toArray().sort(
-      func(a, b) {
-        if (a.slNo < b.slNo) { #less } else if (a.slNo > b.slNo) {
-          #greater;
-        } else { #equal };
-      }
-    );
-  };
-
-  public shared func updateStockEntry(entry : StockEntry) : async () {
-    switch (stockEntries.get(entry.id)) {
-      case (null) {};
-      case (?_) { stockEntries.add(entry.id, entry) };
-    };
-  };
-
-  public shared func deleteStockEntry(id : Text) : async () {
-    switch (stockEntries.get(id)) {
-      case (null) {};
-      case (?_) { stockEntries.remove(id) };
-    };
-  };
-
-  public shared func processStockEntries() : async ProcessStockEntriesResult {
-    var updatedComputers = 0;
-    var addedToStandby = 0;
-
-    let entries = stockEntries.values().toArray();
-    for (entry in entries.values()) {
-      let cpuSlNo = entry.cpuSlNo;
-
-      let computerMatch = computers.values().toArray().find(
-        func(comp) {
-          comp.serialNumber.toLower().contains(#text(cpuSlNo.toLower()));
-        }
-      );
-
-      switch (computerMatch) {
-        case (null) {
-          let standbyExists = standbySystems.values().toArray().find(
-            func(stby) {
-              stby.serialNumber == cpuSlNo;
-            }
-          );
-
-          switch (standbyExists) {
-            case (null) {
-              let newStandby : StandbySystem = {
-                id = cpuSlNo # entry.createdAt.toText();
-                serialNumber = cpuSlNo;
-                model = entry.companyAndModel;
-                brand = "";
-                condition = #good;
-                status = #available;
-                assignedSectionId = null;
-                notes = "Auto-added from stock import";
-                createdAt = Time.now();
-              };
-              standbySystems.add(newStandby.id, newStandby);
-              addedToStandby += 1;
-            };
-            case (?_) {};
-          };
-        };
-        case (?comp) {
-          let updatedComp : Computer = {
-            comp with
-            companyName = entry.companyAndModel;
-            amcCompany = entry.amcTeam;
-            amcStartDate = entry.amcStartDate;
-            amcEndDate = entry.amcExpiryDate;
-          };
-          computers.add(comp.id, updatedComp);
-          updatedComputers += 1;
-        };
-      };
-    };
-
-    {
-      updated = updatedComputers;
-      addedToStandby;
-    };
-  };
-
-  // OtherDevice CRUD
-  public shared func createOtherDevice(device : OtherDevice) : async () {
-    otherDevices.add(device.id, device);
-  };
-
-  public query func getAllOtherDevices() : async [OtherDevice] {
-    otherDevices.values().toArray().sort(
-      func(a, b) {
-        if (a.slNo < b.slNo) { #less } else if (a.slNo > b.slNo) { #greater } else { #equal };
-      }
-    );
-  };
-
-  public shared func updateOtherDevice(device : OtherDevice) : async () {
-    switch (otherDevices.get(device.id)) {
-      case (null) {};
-      case (?_) { otherDevices.add(device.id, device) };
-    };
-  };
-
-  public shared func deleteOtherDevice(id : Text) : async () {
-    switch (otherDevices.get(id)) {
-      case (null) {};
-      case (?_) { otherDevices.remove(id) };
-    };
-  };
-
-  // MovementLog
+  // ── MovementLog ───────────────────────────────────────────────────────────
   public shared func createMovementLog(log : MovementLog) : async () {
     movementLogs.add(log.id, log);
   };
@@ -638,57 +474,61 @@ actor {
   public query func getAllMovementLogs() : async [MovementLog] {
     movementLogs.values().toArray().sort(
       func(a, b) {
-        if (a.dateTime > b.dateTime) { #less } else if (a.dateTime < b.dateTime) { #greater } else { #equal };
+        if (a.dateTime > b.dateTime) #less
+        else if (a.dateTime < b.dateTime) #greater
+        else #equal
       }
     );
   };
 
-  // Dashboard Stats
+  // ── Dashboard Stats ─────────────────────────────────────────────────────
   public query func getDashboardStats() : async {
-    totalComputers : Nat;
-    totalStandbySystems : Nat;
-    openComplaints : Nat;
-    computersWithExpiringAMC : Nat;
-    totalSections : Nat;
+    totalSeats : Nat;
+    totalStandbyDevices : Nat;
     pendingComplaints : Nat;
     clearedComplaints : Nat;
-    inProgressComplaints : Nat;
+    totalOtherDevices : Nat;
+    totalDevices : Nat;
   } {
-    let now = Time.now();
-    let thirtyDaysInNanos = 30 * 24 * 3600 * 1000000000;
-    let expiryThreshold = now + thirtyDaysInNanos;
-
-    let expiringCount = computers.values().toArray().filter(func(c) {
-      c.amcEndDate <= expiryThreshold
+    let allDevices = devices.values().toArray();
+    let standbyCount = allDevices.filter(func(d) {
+      (d.deviceType == "CPU" or d.deviceType == "Monitor") and d.assignedSeatId == ""
     }).size();
-
-    let openCount = complaints.values().toArray().filter(func(c) {
-      c.status == #open
+    let otherCount = allDevices.filter(func(d) {
+      d.deviceType != "CPU" and d.deviceType != "Monitor"
     }).size();
-
-    let inProgressCount = complaints.values().toArray().filter(func(c) {
-      c.status == #inProgress
-    }).size();
-
-    let resolvedCount = complaints.values().toArray().filter(func(c) {
-      c.status == #resolved
-    }).size();
-
+    let allComplaints = complaintStore.values().toArray();
+    let pending = allComplaints.filter(func(c) { c.status == "Pending" or c.status == "LongPending" }).size();
+    let cleared = allComplaints.filter(func(c) { c.status == "Cleared" }).size();
     {
-      totalComputers = computers.size();
-      totalStandbySystems = standbySystems.size();
-      openComplaints = openCount;
-      computersWithExpiringAMC = expiringCount;
-      totalSections = sections.size();
-      pendingComplaints = openCount + inProgressCount;
-      clearedComplaints = resolvedCount;
-      inProgressComplaints = inProgressCount;
+      totalSeats = seats.size();
+      totalStandbyDevices = standbyCount;
+      pendingComplaints = pending;
+      clearedComplaints = cleared;
+      totalOtherDevices = otherCount;
+      totalDevices = allDevices.size();
     };
   };
 
-  // Stubs for backward compatibility with frontend bindings
-  public shared func _initializeAccessControlWithSecret(_ : Text) : async () {};
+  // ── Clear all data ────────────────────────────────────────────────────────
+  public shared func clearAllData() : async () {
+    for ((k, _) in devices.entries().toArray().vals()) { ignore devices.remove(k) };
+    for ((k, _) in seats.entries().toArray().vals()) { ignore seats.remove(k) };
+    for ((k, _) in sections.entries().toArray().vals()) { ignore sections.remove(k) };
+    for ((k, _) in complaintStore.entries().toArray().vals()) { ignore complaintStore.remove(k) };
+    for ((k, _) in movementLogs.entries().toArray().vals()) { ignore movementLogs.remove(k) };
+  };
+
+  // ── UserProfile ───────────────────────────────────────────────────────────
+  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    userProfiles.get(caller);
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    userProfiles.add(caller, profile);
+  };
+
+  // ── Stubs ─────────────────────────────────────────────────────────────────
   public query func isCallerAdmin() : async Bool { false };
   public query func getCallerUserRole() : async { #admin; #user; #guest } { #guest };
-  public shared func assignCallerUserRole(_ : Principal, _ : { #admin; #user; #guest }) : async () {};
 };

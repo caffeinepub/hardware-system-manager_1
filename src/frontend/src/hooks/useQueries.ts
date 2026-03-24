@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
-  AMCPart,
   Complaint,
   Computer,
+  Device,
+  MovementLog,
+  Seat,
   Section,
   StandbySystem,
-  StockEntry,
 } from "../backend";
-import type { ComplaintStatus } from "../backend";
 import { useActor } from "./useActor";
 
 // ─── Sections ────────────────────────────────────────────────────────────────
@@ -60,127 +60,222 @@ export function useDeleteSection() {
   });
 }
 
-// ─── Computers ────────────────────────────────────────────────────────────────
+// ─── Devices (unified stock) ──────────────────────────────────────────────────
 
-export function useGetAllComputers() {
+export function useGetAllDevices() {
   const { actor, isFetching } = useActor();
-  return useQuery<Computer[]>({
-    queryKey: ["computers"],
+  return useQuery<Device[]>({
+    queryKey: ["devices"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllComputers();
+      return actor.getAllDevices();
     },
     enabled: !!actor && !isFetching,
   });
 }
 
-export function useGetComputersBySection(sectionId: string) {
-  const { actor, isFetching } = useActor();
-  return useQuery<Computer[]>({
-    queryKey: ["computers", "section", sectionId],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getComputersBySection(sectionId);
-    },
-    enabled: !!actor && !isFetching && !!sectionId,
-  });
-}
-
-export function useGetComputersWithExpiringAMC(days: number) {
-  const { actor, isFetching } = useActor();
-  return useQuery<Computer[]>({
-    queryKey: ["computers", "expiring-amc", days],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getComputersWithExpiringAMC(BigInt(days));
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useCreateComputer() {
+export function useCreateDevice() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (computer: Computer) => {
+    mutationFn: (device: Device) => {
       if (!actor) throw new Error("No actor");
-      return actor.createComputer(computer);
+      return actor.createDevice(device);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["computers"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
   });
 }
 
-export function useUpdateComputer() {
+export function useUpdateDevice() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (computer: Computer) => {
+    mutationFn: (device: Device) => {
       if (!actor) throw new Error("No actor");
-      return actor.updateComputer(computer);
+      return actor.updateDevice(device);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["computers"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
   });
 }
 
-export function useDeleteComputer() {
+export function useDeleteDevice() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => {
       if (!actor) throw new Error("No actor");
-      return actor.deleteComputer(id);
+      return actor.deleteDevice(id);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["computers"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
   });
 }
 
-// ─── Standby Systems ──────────────────────────────────────────────────────────
+// ─── Seats ────────────────────────────────────────────────────────────────────
 
-export function useGetAllStandbySystems() {
+export function useGetAllSeats() {
   const { actor, isFetching } = useActor();
-  return useQuery<StandbySystem[]>({
-    queryKey: ["standby"],
+  return useQuery<Seat[]>({
+    queryKey: ["seats"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllStandbySystems();
+      return actor.getAllSeats();
     },
     enabled: !!actor && !isFetching,
   });
 }
 
-export function useCreateStandbySystem() {
+export function useCreateSeat() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (ss: StandbySystem) => {
+    mutationFn: (seat: Seat) => {
       if (!actor) throw new Error("No actor");
-      return actor.createStandbySystem(ss);
+      return actor.createSeat(seat);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["standby"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["seats"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
   });
 }
 
-export function useUpdateStandbySystem() {
+export function useUpdateSeat() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (ss: StandbySystem) => {
+    mutationFn: (seat: Seat) => {
       if (!actor) throw new Error("No actor");
-      return actor.updateStandbySystem(ss);
+      return actor.updateSeat(seat);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["standby"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["seats"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
   });
 }
 
-export function useDeleteStandbySystem() {
+export function useDeleteSeat() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => {
       if (!actor) throw new Error("No actor");
-      return actor.deleteStandbySystem(id);
+      return actor.deleteSeat(id);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["standby"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["seats"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+  });
+}
+
+// ─── OtherDevices (filtered view of unified Device store) ────────────────────
+// Non-computer device types stored in the same Device pool.
+
+const COMPUTER_TYPES = new Set([
+  "CPU",
+  "Monitor",
+  "Micro Computer",
+  "All-in-One PC",
+]);
+
+export interface OtherDevice {
+  id: string;
+  slNo: bigint;
+  unitArticle: string;
+  makeAndModel: string;
+  serialNumber: string;
+  section: string;
+  ipAddress: string;
+  workingStatus: string;
+  remarks: string;
+  createdAt: bigint;
+}
+
+function deviceToOtherDevice(d: Device, idx: number): OtherDevice {
+  return {
+    id: d.id,
+    slNo: BigInt(idx + 1),
+    unitArticle: d.deviceType,
+    makeAndModel: d.makeAndModel,
+    serialNumber: d.serialNumber,
+    section: d.sectionId,
+    ipAddress: d.ipAddress,
+    workingStatus: d.workingStatus,
+    remarks: d.remarks,
+    createdAt: d.createdAt,
+  };
+}
+
+function otherDeviceToDevice(od: OtherDevice): Device {
+  return {
+    id: od.serialNumber || od.id,
+    serialNumber: od.serialNumber,
+    deviceType: od.unitArticle,
+    makeAndModel: od.makeAndModel,
+    companyName: "",
+    amcTeam: "",
+    amcStartDate: 0n,
+    amcExpiryDate: 0n,
+    assignedSeatId: "",
+    sectionId: od.section,
+    workingStatus: od.workingStatus,
+    ipAddress: od.ipAddress,
+    remarks: od.remarks,
+    previousSection: "",
+    dateMovedToStandby: 0n,
+    createdAt: od.createdAt || BigInt(Date.now()) * 1_000_000n,
+  };
+}
+
+export function useGetAllOtherDevices() {
+  const { actor, isFetching } = useActor();
+  return useQuery<OtherDevice[]>({
+    queryKey: ["other-devices"],
+    queryFn: async () => {
+      if (!actor) return [];
+      const all = await actor.getAllDevices();
+      return all
+        .filter((d) => !COMPUTER_TYPES.has(d.deviceType))
+        .map((d, i) => deviceToOtherDevice(d, i));
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useCreateOtherDevice() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (device: OtherDevice) => {
+      if (!actor) throw new Error("No actor");
+      return actor.createDevice(otherDeviceToDevice(device));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
+  });
+}
+
+export function useUpdateOtherDevice() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (device: OtherDevice) => {
+      if (!actor) throw new Error("No actor");
+      return actor.updateDevice(otherDeviceToDevice(device));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
+  });
+}
+
+export function useDeleteOtherDevice() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => {
+      if (!actor) throw new Error("No actor");
+      return actor.deleteDevice(id);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
   });
 }
 
@@ -193,18 +288,6 @@ export function useGetAllComplaints() {
     queryFn: async () => {
       if (!actor) return [];
       return actor.getAllComplaints();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useGetComplaintsByStatus(status: ComplaintStatus) {
-  const { actor, isFetching } = useActor();
-  return useQuery<Complaint[]>({
-    queryKey: ["complaints", "status", status],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getComplaintsByStatus(status);
     },
     enabled: !!actor && !isFetching,
   });
@@ -246,166 +329,29 @@ export function useDeleteComplaint() {
   });
 }
 
-// ─── AMC Parts ────────────────────────────────────────────────────────────────
+// ─── Movement Logs ───────────────────────────────────────────────────────────
 
-export function useGetAllAMCParts() {
+export function useGetAllMovementLogs() {
   const { actor, isFetching } = useActor();
-  return useQuery<AMCPart[]>({
-    queryKey: ["amc-parts"],
+  return useQuery<MovementLog[]>({
+    queryKey: ["movement-logs"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllAMCParts();
+      return actor.getAllMovementLogs();
     },
     enabled: !!actor && !isFetching,
   });
 }
 
-export function useGetExpiringAMCParts(days: number) {
-  const { actor, isFetching } = useActor();
-  return useQuery<AMCPart[]>({
-    queryKey: ["amc-parts", "expiring", days],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getExpiringAMCParts(BigInt(days));
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useCreateAMCPart() {
+export function useCreateMovementLog() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (part: AMCPart) => {
+    mutationFn: (log: MovementLog) => {
       if (!actor) throw new Error("No actor");
-      return actor.createAMCPart(part);
+      return actor.createMovementLog(log);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["amc-parts"] }),
-  });
-}
-
-export function useUpdateAMCPart() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (part: AMCPart) => {
-      if (!actor) throw new Error("No actor");
-      return actor.updateAMCPart(part);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["amc-parts"] }),
-  });
-}
-
-export function useDeleteAMCPart() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => {
-      if (!actor) throw new Error("No actor");
-      return actor.deleteAMCPart(id);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["amc-parts"] }),
-  });
-}
-
-// ─── Stock Entries ────────────────────────────────────────────────────────────
-
-export function useGetAllStockEntries() {
-  const { actor, isFetching } = useActor();
-  return useQuery<StockEntry[]>({
-    queryKey: ["stock-entries"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getAllStockEntries();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useCreateStockEntry() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (entry: StockEntry) => {
-      if (!actor) throw new Error("No actor");
-      return actor.createStockEntry(entry);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["stock-entries"] }),
-  });
-}
-
-export function useDeleteStockEntry() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => {
-      if (!actor) throw new Error("No actor");
-      return actor.deleteStockEntry(id);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["stock-entries"] }),
-  });
-}
-
-// ─── OtherDevices ────────────────────────────────────────────────────────────
-
-export interface OtherDevice {
-  id: string;
-  slNo: bigint;
-  unitArticle: string;
-  makeAndModel: string;
-  serialNumber: string;
-  section: string;
-  ipAddress: string;
-  workingStatus: string;
-  remarks: string;
-  createdAt: bigint;
-}
-
-export function useGetAllOtherDevices() {
-  const { actor, isFetching } = useActor();
-  return useQuery<OtherDevice[]>({
-    queryKey: ["other-devices"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return (actor as any).getAllOtherDevices() as Promise<OtherDevice[]>;
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useCreateOtherDevice() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (device: OtherDevice) => {
-      if (!actor) throw new Error("No actor");
-      return (actor as any).createOtherDevice(device);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
-  });
-}
-
-export function useUpdateOtherDevice() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (device: OtherDevice) => {
-      if (!actor) throw new Error("No actor");
-      return (actor as any).updateOtherDevice(device);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
-  });
-}
-
-export function useDeleteOtherDevice() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => {
-      if (!actor) throw new Error("No actor");
-      return (actor as any).deleteOtherDevice(id);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["other-devices"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["movement-logs"] }),
   });
 }
 
@@ -437,16 +383,227 @@ export function useIsCallerAdmin() {
   });
 }
 
-// ─── Movement Logs ───────────────────────────────────────────────────────────
+// ─── Legacy Computer hooks (Computers.tsx / DataImport.tsx compat) ────────────
+// Maps old Computer interface to Seat + Device in the new backend.
 
-export function useGetAllMovementLogs() {
+function seatToComputer(seat: Seat, deviceMap: Map<string, Device>): Computer {
+  const cpu = deviceMap.get(seat.cpuSerial);
+  return {
+    id: seat.id,
+    sectionId: seat.sectionId,
+    seatNumber: seat.seatNumber,
+    currentUser: seat.currentUser,
+    serialNumber: seat.cpuSerial,
+    monitorSerial: seat.monitorSerial,
+    model: cpu?.makeAndModel ?? "",
+    brand: cpu?.companyName ?? "",
+    companyName: cpu?.companyName ?? "",
+    amcCompany: cpu?.amcTeam ?? "",
+    monitorModel: "",
+    ip1: seat.ip1,
+    ip2: seat.ip2,
+    remarks: seat.remarks,
+    notes: "",
+    purchaseDate: 0n,
+    amcStartDate: cpu?.amcStartDate ?? 0n,
+    amcEndDate: cpu?.amcExpiryDate ?? 0n,
+    status: "active" as any,
+    datasheetBlob: undefined,
+    createdAt: seat.createdAt,
+  };
+}
+
+function computerToSeat(c: Computer): Seat {
+  return {
+    id: c.id || crypto.randomUUID(),
+    sectionId: c.sectionId,
+    seatNumber: c.seatNumber,
+    currentUser: c.currentUser,
+    cpuSerial: c.serialNumber,
+    monitorSerial: c.monitorSerial,
+    ip1: c.ip1,
+    ip2: c.ip2,
+    remarks: c.remarks,
+    createdAt: c.createdAt || BigInt(Date.now()) * 1_000_000n,
+  };
+}
+
+export function useGetAllComputers() {
   const { actor, isFetching } = useActor();
-  return useQuery({
-    queryKey: ["movement-logs"],
+  return useQuery<Computer[]>({
+    queryKey: ["computers"],
     queryFn: async () => {
       if (!actor) return [];
-      return (actor as any).getAllMovementLogs() as Promise<any[]>;
+      const [seats, devices] = await Promise.all([
+        actor.getAllSeats(),
+        actor.getAllDevices(),
+      ]);
+      const deviceMap = new Map(devices.map((d) => [d.serialNumber, d]));
+      return seats.map((s) => seatToComputer(s, deviceMap));
     },
     enabled: !!actor && !isFetching,
   });
+}
+
+export function useCreateComputer() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (computer: Computer) => {
+      if (!actor) throw new Error("No actor");
+      return actor.createSeat(computerToSeat(computer));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["computers"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+  });
+}
+
+export function useUpdateComputer() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (computer: Computer) => {
+      if (!actor) throw new Error("No actor");
+      return actor.updateSeat(computerToSeat(computer));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["computers"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+  });
+}
+
+export function useDeleteComputer() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => {
+      if (!actor) throw new Error("No actor");
+      return actor.deleteSeat(id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["computers"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+  });
+}
+
+// ─── Legacy StandbySystem hooks (StandbySystems.tsx compat) ──────────────────
+// Maps old StandbySystem interface to Device (unassigned) in the new backend.
+
+const STANDBY_COMPUTER_TYPES = new Set([
+  "CPU",
+  "Monitor",
+  "Micro Computer",
+  "All-in-One PC",
+]);
+
+function deviceToStandby(d: Device): StandbySystem {
+  return {
+    id: d.id,
+    serialNumber: d.serialNumber,
+    model: d.makeAndModel,
+    brand: d.deviceType,
+    condition: "good" as any,
+    status: (d.workingStatus || "Available") as any,
+    notes: d.remarks,
+    assignedSectionId: d.previousSection || undefined,
+    createdAt: d.dateMovedToStandby || d.createdAt,
+  };
+}
+
+function standbyToDevice(ss: StandbySystem): Device {
+  return {
+    id: ss.id || ss.serialNumber,
+    serialNumber: ss.serialNumber,
+    deviceType: ss.brand || "CPU",
+    makeAndModel: ss.model,
+    companyName: "",
+    amcTeam: "",
+    amcStartDate: 0n,
+    amcExpiryDate: 0n,
+    assignedSeatId: "",
+    sectionId: "",
+    workingStatus: ss.status || "Available",
+    ipAddress: "",
+    remarks: ss.notes,
+    previousSection: ss.assignedSectionId ?? "",
+    dateMovedToStandby: ss.createdAt,
+    createdAt: ss.createdAt,
+  };
+}
+
+export function useGetAllStandbySystems() {
+  const { actor, isFetching } = useActor();
+  return useQuery<StandbySystem[]>({
+    queryKey: ["standby"],
+    queryFn: async () => {
+      if (!actor) return [];
+      const all = await actor.getAllDevices();
+      return all
+        .filter(
+          (d) =>
+            STANDBY_COMPUTER_TYPES.has(d.deviceType) && d.assignedSeatId === "",
+        )
+        .map(deviceToStandby);
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useCreateStandbySystem() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ss: StandbySystem) => {
+      if (!actor) throw new Error("No actor");
+      return actor.createDevice(standbyToDevice(ss));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["standby"] }),
+  });
+}
+
+export function useUpdateStandbySystem() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ss: StandbySystem) => {
+      if (!actor) throw new Error("No actor");
+      return actor.updateDevice(standbyToDevice(ss));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["standby"] }),
+  });
+}
+
+export function useDeleteStandbySystem() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => {
+      if (!actor) throw new Error("No actor");
+      return actor.deleteDevice(id);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["standby"] }),
+  });
+}
+
+// ─── AMC Parts stubs (AMCParts.tsx / MaintenanceCharts.tsx compat) ────────────
+import type { AMCPart } from "../backend";
+
+export function useGetAllAMCParts() {
+  return { data: [] as AMCPart[], isLoading: false };
+}
+export function useGetExpiringAMCParts(_days: number) {
+  return { data: [] as AMCPart[], isLoading: false };
+}
+export function useCreateAMCPart() {
+  return { mutateAsync: async (_: AMCPart) => {}, isPending: false };
+}
+export function useUpdateAMCPart() {
+  return { mutateAsync: async (_: AMCPart) => {}, isPending: false };
+}
+export function useDeleteAMCPart() {
+  return { mutateAsync: async (_: string) => {}, isPending: false };
 }
