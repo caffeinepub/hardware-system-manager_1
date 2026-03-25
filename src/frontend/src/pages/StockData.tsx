@@ -77,8 +77,6 @@ const STATUS_OPTIONS = [
   "Working",
   "Issue Reported",
   "e-Waste",
-  "Not Working",
-  "Under Repair",
   "Others",
 ] as const;
 
@@ -103,8 +101,6 @@ const STATUS_COLORS: Record<string, string> = {
   Working: "bg-green-100 text-green-700 border-green-200",
   "Issue Reported": "bg-orange-100 text-orange-700 border-orange-200",
   "e-Waste": "bg-red-100 text-red-700 border-red-200",
-  "Not Working": "bg-red-100 text-red-700 border-red-200",
-  "Under Repair": "bg-amber-100 text-amber-700 border-amber-200",
   Others: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
@@ -113,6 +109,8 @@ const STATUS_COLORS: Record<string, string> = {
 interface CsvRow {
   deviceType: string;
   serialNumber: string;
+  cpuSerialNumber: string;
+  monitorSerialNumber: string;
   makeAndModel: string;
   section: string;
   ipAddress: string;
@@ -126,6 +124,8 @@ interface CsvRow {
 interface FormState {
   deviceType: string;
   serialNumber: string;
+  cpuSerialNumber: string;
+  monitorSerialNumber: string;
   makeAndModel: string;
   section: string;
   ipAddress: string;
@@ -139,6 +139,8 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   deviceType: "CPU",
   serialNumber: "",
+  cpuSerialNumber: "",
+  monitorSerialNumber: "",
   makeAndModel: "",
   section: "",
   ipAddress: "",
@@ -183,14 +185,16 @@ function parseUnifiedCSV(text: string): CsvRow[] {
       return {
         deviceType: (cols[0] ?? "").trim(),
         serialNumber: (cols[1] ?? "").trim(),
-        makeAndModel: (cols[2] ?? "").trim(),
-        section: (cols[3] ?? "").trim(),
-        ipAddress: (cols[4] ?? "").trim(),
-        status: (cols[5] ?? "").trim(),
-        amcTeam: (cols[6] ?? "").trim(),
-        amcStartDate: (cols[7] ?? "").trim(),
-        amcEndDate: (cols[8] ?? "").trim(),
-        remarks: (cols[9] ?? "").trim(),
+        cpuSerialNumber: (cols[2] ?? "").trim(),
+        monitorSerialNumber: (cols[3] ?? "").trim(),
+        makeAndModel: (cols[4] ?? "").trim(),
+        section: (cols[5] ?? "").trim(),
+        ipAddress: (cols[6] ?? "").trim(),
+        status: (cols[7] ?? "").trim(),
+        amcTeam: (cols[8] ?? "").trim(),
+        amcStartDate: (cols[9] ?? "").trim(),
+        amcEndDate: (cols[10] ?? "").trim(),
+        remarks: (cols[11] ?? "").trim(),
       };
     })
     .filter((r) => r.serialNumber);
@@ -212,6 +216,8 @@ function downloadTemplate() {
   const headers = [
     "Device Type",
     "Serial Number",
+    "CPU Serial Number",
+    "Monitor Serial Number",
     "Make and Model",
     "Section",
     "IP Address",
@@ -223,9 +229,10 @@ function downloadTemplate() {
   ];
   const rows = [
     headers.join(","),
-    "CPU,SN123456789,HP EliteDesk 800 G5,D1,,Available,TechAMC Solutions,01/04/2024,31/03/2025,Main workstation",
-    "Monitor,MON987654321,Dell P2422H,D1,,Available,TechAMC Solutions,01/04/2024,31/03/2025,",
-    "Printer,PRN001,HP LaserJet Pro M404n,Officers,,Working,PrintAMC,01/04/2024,31/03/2025,",
+    "CPU,SN123456789,,,HP EliteDesk 800 G5,D1,,Available,TechAMC Solutions,01/04/2024,31/03/2025,Main workstation",
+    "Monitor,MON987654321,,,Dell P2422H,D1,,Available,TechAMC Solutions,01/04/2024,31/03/2025,",
+    "Micro Computer,MC001,CPU-SN-001,MON-SN-001,Dell OptiPlex Micro,D2,,Available,TechAMC Solutions,01/04/2024,31/03/2025,Micro PC with paired monitor",
+    "Printer,PRN001,,,HP LaserJet Pro M404n,Officers,,Working,PrintAMC,01/04/2024,31/03/2025,",
   ];
   const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -242,6 +249,8 @@ function exportDevicesCSV(devices: any[]) {
   const headers = [
     "Device Type",
     "Serial Number",
+    "CPU Serial Number",
+    "Monitor Serial Number",
     "Make and Model",
     "Section",
     "IP Address",
@@ -254,6 +263,8 @@ function exportDevicesCSV(devices: any[]) {
   const rows = devices.map((d) => [
     d.deviceType ?? "",
     d.serialNumber ?? "",
+    d.cpuSerialNumber ?? "",
+    d.monitorSerialNumber ?? "",
     d.makeAndModel ?? d.companyName ?? "",
     d.sectionId ?? "",
     d.ipAddress ?? "",
@@ -344,6 +355,15 @@ export default function StockData() {
     enabled: !!actor && !actorFetching,
   });
 
+  const { data: sections = [] } = useQuery<any[]>({
+    queryKey: ["sections"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getAllSections();
+    },
+    enabled: !!actor && !actorFetching,
+  });
+
   // CSV upload state
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvFileName, setCsvFileName] = useState("");
@@ -373,6 +393,82 @@ export default function StockData() {
     queryClient.invalidateQueries({ queryKey: ["computers"] });
     queryClient.invalidateQueries({ queryKey: ["standby"] });
     queryClient.invalidateQueries({ queryKey: ["other-devices"] });
+  };
+
+  const resolveSectionId = async (sectionName: string): Promise<string> => {
+    if (!sectionName.trim() || !actor) return "";
+    const key = sectionName.trim().toLowerCase();
+    const existing = sections.find((s: any) => s.name.toLowerCase() === key);
+    if (existing) return existing.id;
+    const newId = crypto.randomUUID();
+    await (actor as any).createSection({
+      id: newId,
+      name: sectionName.trim(),
+      description: "",
+      location: "",
+      createdAt: BigInt(Date.now()),
+    });
+    queryClient.invalidateQueries({ queryKey: ["sections"] });
+    return newId;
+  };
+
+  const getSectionDisplay = (sectionId: string): string => {
+    if (!sectionId) return "";
+    const found = sections.find((s: any) => s.id === sectionId);
+    if (found) return found.name;
+    return sectionId;
+  };
+
+  const COMPUTER_TYPES_SET = new Set([
+    "CPU",
+    "Monitor",
+    "Micro Computer",
+    "All-in-One PC",
+  ]);
+
+  const autoCreateSeat = async (
+    device: any,
+    sectionId: string,
+  ): Promise<void> => {
+    if (!actor || !sectionId || !COMPUTER_TYPES_SET.has(device.deviceType))
+      return;
+    try {
+      const allSeats: any[] = await (actor as any).getAllSeats();
+      const alreadySeated = allSeats.some(
+        (s: any) =>
+          s.cpuSerial === device.serialNumber ||
+          s.monitorSerial === device.serialNumber,
+      );
+      if (alreadySeated) return;
+
+      let cpuSerial = "";
+      let monitorSerial = "";
+      if (device.deviceType === "Monitor") {
+        monitorSerial = device.serialNumber;
+      } else if (device.deviceType === "Micro Computer") {
+        cpuSerial = device.cpuSerialNumber || device.serialNumber;
+        monitorSerial = device.monitorSerialNumber || "";
+      } else {
+        cpuSerial = device.serialNumber;
+      }
+
+      await (actor as any).createSeat({
+        id: crypto.randomUUID(),
+        sectionId,
+        seatNumber: "",
+        currentUser: "",
+        cpuSerial,
+        monitorSerial,
+        ip1: device.ipAddress || "",
+        ip2: "",
+        remarks: "",
+        createdAt: BigInt(Date.now()),
+      });
+      queryClient.invalidateQueries({ queryKey: ["seats"] });
+      queryClient.invalidateQueries({ queryKey: ["computers"] });
+    } catch (e) {
+      console.warn("autoCreateSeat failed:", e);
+    }
   };
 
   // ── File handling ──────────────────────────────────────────────────────────
@@ -413,20 +509,57 @@ export default function StockData() {
     let saved = 0;
     let errors = 0;
 
+    // Pre-fetch sections to build a name → id map
+    let sectionMap = new Map<string, string>(
+      sections.map(
+        (s: any) => [s.name.toLowerCase(), s.id] as [string, string],
+      ),
+    );
+
+    const getOrCreateSection = async (name: string): Promise<string> => {
+      if (!name.trim()) return "";
+      const key = name.trim().toLowerCase();
+      if (sectionMap.has(key)) return sectionMap.get(key)!;
+      const newId = crypto.randomUUID();
+      await (actor as any).createSection({
+        id: newId,
+        name: name.trim(),
+        description: "",
+        location: "",
+        createdAt: BigInt(Date.now()),
+      });
+      sectionMap.set(key, newId);
+      return newId;
+    };
+
+    // Pre-fetch seats to avoid creating duplicates
+    let existingSeats: any[] = [];
+    try {
+      existingSeats = await (actor as any).getAllSeats();
+    } catch (_) {}
+    const seatedSerials = new Set<string>([
+      ...existingSeats.map((s: any) => s.cpuSerial).filter(Boolean),
+      ...existingSeats.map((s: any) => s.monitorSerial).filter(Boolean),
+    ]);
+
     for (let i = 0; i < csvRows.length; i++) {
       const row = csvRows[i];
       try {
-        const device = {
+        const sectionId = await getOrCreateSection(row.section);
+
+        const device: any = {
           id: row.serialNumber,
           serialNumber: row.serialNumber,
-          deviceType: row.deviceType,
+          deviceType: row.deviceType || "CPU",
+          cpuSerialNumber: row.cpuSerialNumber ?? "",
+          monitorSerialNumber: row.monitorSerialNumber ?? "",
           makeAndModel: row.makeAndModel,
           companyName: row.makeAndModel,
           amcTeam: row.amcTeam,
           amcStartDate: parseDateToBigInt(row.amcStartDate),
           amcExpiryDate: parseDateToBigInt(row.amcEndDate),
           assignedSeatId: "",
-          sectionId: row.section,
+          sectionId,
           workingStatus: row.status || "Available",
           ipAddress: row.ipAddress,
           remarks: row.remarks,
@@ -434,10 +567,52 @@ export default function StockData() {
           dateMovedToStandby: BigInt(0),
           createdAt: BigInt(Date.now()),
         };
-        await (actor as any).createDevice(device);
+
+        // Upsert: try update first, then create
+        try {
+          await (actor as any).updateDevice(device);
+        } catch (_) {
+          await (actor as any).createDevice(device);
+        }
+
+        // Auto-create seat for computer types with section
+        if (
+          sectionId &&
+          COMPUTER_TYPES_SET.has(row.deviceType) &&
+          !seatedSerials.has(row.serialNumber)
+        ) {
+          let cpuSerial = "";
+          let monitorSerial = "";
+          if (row.deviceType === "Monitor") {
+            monitorSerial = row.serialNumber;
+          } else if (row.deviceType === "Micro Computer") {
+            cpuSerial = row.cpuSerialNumber || row.serialNumber;
+            monitorSerial = row.monitorSerialNumber || "";
+          } else {
+            cpuSerial = row.serialNumber;
+          }
+          try {
+            await (actor as any).createSeat({
+              id: crypto.randomUUID(),
+              sectionId,
+              seatNumber: "",
+              currentUser: "",
+              cpuSerial,
+              monitorSerial,
+              ip1: row.ipAddress || "",
+              ip2: "",
+              remarks: "",
+              createdAt: BigInt(Date.now()),
+            });
+            seatedSerials.add(row.serialNumber);
+          } catch (se) {
+            console.warn("Auto-seat creation failed:", se);
+          }
+        }
+
         saved++;
       } catch (err) {
-        console.error("createDevice failed:", err);
+        console.error("Import row failed:", err);
         errors++;
       }
       setImportProgress(Math.round(((i + 1) / csvRows.length) * 100));
@@ -448,6 +623,9 @@ export default function StockData() {
     setIsImporting(false);
     setImportDone(true);
     invalidateAll();
+    queryClient.invalidateQueries({ queryKey: ["sections"] });
+    queryClient.invalidateQueries({ queryKey: ["computers"] });
+    queryClient.invalidateQueries({ queryKey: ["seats"] });
 
     if (errors === 0) {
       toast.success(`Imported ${saved} device(s) successfully`);
@@ -469,8 +647,11 @@ export default function StockData() {
     setFormState({
       deviceType: device.deviceType ?? "CPU",
       serialNumber: device.serialNumber ?? "",
+      cpuSerialNumber: device.cpuSerialNumber ?? "",
+      monitorSerialNumber: device.monitorSerialNumber ?? "",
       makeAndModel: device.makeAndModel ?? device.companyName ?? "",
-      section: device.sectionId ?? "",
+      section:
+        (getSectionDisplay(device.sectionId ?? "") || device.sectionId) ?? "",
       ipAddress: device.ipAddress ?? "",
       status: device.workingStatus ?? "Available",
       amcTeam: device.amcTeam ?? "",
@@ -494,17 +675,100 @@ export default function StockData() {
     }
     setIsSaving(true);
     try {
+      const isMicroComputer = formState.deviceType === "Micro Computer";
+
+      // If editing a Micro Computer and CPU/Monitor SN changed, move old to standby
+      if (editingDevice && isMicroComputer) {
+        const oldCpu = editingDevice.cpuSerialNumber ?? "";
+        const oldMon = editingDevice.monitorSerialNumber ?? "";
+        const newCpu = formState.cpuSerialNumber.trim();
+        const newMon = formState.monitorSerialNumber.trim();
+
+        if (oldCpu && newCpu && oldCpu !== newCpu) {
+          // Move old CPU to standby
+          const standbyDevice = {
+            id: oldCpu,
+            serialNumber: oldCpu,
+            deviceType: "CPU",
+            cpuSerialNumber: "",
+            monitorSerialNumber: "",
+            makeAndModel: editingDevice.makeAndModel ?? "",
+            companyName: editingDevice.makeAndModel ?? "",
+            amcTeam: editingDevice.amcTeam ?? "",
+            amcStartDate: editingDevice.amcStartDate ?? BigInt(0),
+            amcExpiryDate: editingDevice.amcExpiryDate ?? BigInt(0),
+            assignedSeatId: "",
+            sectionId: "",
+            workingStatus: "Available",
+            ipAddress: "",
+            remarks: `Replaced from Micro Computer ${formState.serialNumber}`,
+            previousSection: editingDevice.sectionId ?? "",
+            dateMovedToStandby: BigInt(Date.now()),
+            createdAt: BigInt(Date.now()),
+          };
+          try {
+            await (actor as any).createDevice(standbyDevice);
+          } catch (_) {
+            // might already exist; try update
+            try {
+              await (actor as any).updateDevice(standbyDevice);
+            } catch (_2) {
+              /* ignore */
+            }
+          }
+        }
+
+        if (oldMon && newMon && oldMon !== newMon) {
+          // Move old Monitor to standby
+          const standbyDevice = {
+            id: oldMon,
+            serialNumber: oldMon,
+            deviceType: "Monitor",
+            cpuSerialNumber: "",
+            monitorSerialNumber: "",
+            makeAndModel: editingDevice.makeAndModel ?? "",
+            companyName: editingDevice.makeAndModel ?? "",
+            amcTeam: editingDevice.amcTeam ?? "",
+            amcStartDate: editingDevice.amcStartDate ?? BigInt(0),
+            amcExpiryDate: editingDevice.amcExpiryDate ?? BigInt(0),
+            assignedSeatId: "",
+            sectionId: "",
+            workingStatus: "Available",
+            ipAddress: "",
+            remarks: `Replaced from Micro Computer ${formState.serialNumber}`,
+            previousSection: editingDevice.sectionId ?? "",
+            dateMovedToStandby: BigInt(Date.now()),
+            createdAt: BigInt(Date.now()),
+          };
+          try {
+            await (actor as any).createDevice(standbyDevice);
+          } catch (_) {
+            try {
+              await (actor as any).updateDevice(standbyDevice);
+            } catch (_2) {
+              /* ignore */
+            }
+          }
+        }
+      }
+
       const device = {
         id: formState.serialNumber.trim(),
         serialNumber: formState.serialNumber.trim(),
         deviceType: formState.deviceType,
+        cpuSerialNumber: isMicroComputer
+          ? formState.cpuSerialNumber.trim()
+          : "",
+        monitorSerialNumber: isMicroComputer
+          ? formState.monitorSerialNumber.trim()
+          : "",
         makeAndModel: formState.makeAndModel,
         companyName: formState.makeAndModel,
         amcTeam: formState.amcTeam,
         amcStartDate: parseDateToBigInt(formState.amcStartDate),
         amcExpiryDate: parseDateToBigInt(formState.amcEndDate),
         assignedSeatId: editingDevice?.assignedSeatId ?? "",
-        sectionId: formState.section,
+        sectionId: await resolveSectionId(formState.section),
         workingStatus: formState.status,
         ipAddress: formState.ipAddress,
         remarks: formState.remarks,
@@ -518,6 +782,31 @@ export default function StockData() {
       } else {
         await (actor as any).createDevice(device);
         toast.success("Device added successfully");
+      }
+      // Auto-create seat for computer types with section
+      const resolvedSectionId = device.sectionId as string;
+      if (resolvedSectionId && COMPUTER_TYPES_SET.has(formState.deviceType)) {
+        await autoCreateSeat(device, resolvedSectionId);
+      }
+      // If section was removed and device was computer type, delete seat
+      if (
+        !resolvedSectionId &&
+        editingDevice?.sectionId &&
+        COMPUTER_TYPES_SET.has(formState.deviceType)
+      ) {
+        try {
+          const allSeats: any[] = await (actor as any).getAllSeats();
+          const seat = allSeats.find(
+            (s: any) =>
+              s.cpuSerial === formState.serialNumber ||
+              s.monitorSerial === formState.serialNumber,
+          );
+          if (seat) {
+            await (actor as any).deleteSeat(seat.id);
+            queryClient.invalidateQueries({ queryKey: ["seats"] });
+            queryClient.invalidateQueries({ queryKey: ["computers"] });
+          }
+        } catch (_) {}
       }
       invalidateAll();
       setEntryDialogOpen(false);
@@ -554,9 +843,14 @@ export default function StockData() {
       (d.deviceType ?? "").toLowerCase().includes(q) ||
       (d.makeAndModel ?? d.companyName ?? "").toLowerCase().includes(q) ||
       (d.sectionId ?? "").toLowerCase().includes(q) ||
-      (d.amcTeam ?? "").toLowerCase().includes(q)
+      (d.amcTeam ?? "").toLowerCase().includes(q) ||
+      (d.cpuSerialNumber ?? "").toLowerCase().includes(q) ||
+      (d.monitorSerialNumber ?? "").toLowerCase().includes(q)
     );
   });
+
+  // Column counts for skeleton
+  const colCount = isLoggedIn ? 11 : 10;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -672,9 +966,9 @@ export default function StockData() {
                   Drop a CSV file here or click to select
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Columns: Device Type, Serial Number, Make and Model, Section,
-                  IP Address, Status, AMC Team, AMC Start Date, AMC End Date,
-                  Remarks
+                  Columns: Device Type, Serial Number, CPU Serial Number,
+                  Monitor Serial Number, Make and Model, Section, IP Address,
+                  Status, AMC Team, AMC Start Date, AMC End Date, Remarks
                 </p>
               </>
             )}
@@ -769,6 +1063,7 @@ export default function StockData() {
                 <TableHead className="w-12">Sl No</TableHead>
                 <TableHead>Device Type</TableHead>
                 <TableHead>Serial Number</TableHead>
+                <TableHead>CPU / Monitor SN</TableHead>
                 <TableHead>Make &amp; Model</TableHead>
                 <TableHead>Section</TableHead>
                 <TableHead>Status</TableHead>
@@ -782,20 +1077,31 @@ export default function StockData() {
               {isLoading ? (
                 [1, 2, 3, 4, 5].map((i) => (
                   <TableRow key={`skel-row-${i}`}>
-                    {(isLoggedIn
-                      ? ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
-                      : ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
-                    ).map((col) => (
-                      <TableCell key={`skel-${i}-${col}`}>
-                        <Skeleton className="h-4 w-full" />
-                      </TableCell>
-                    ))}
+                    {[
+                      "sl",
+                      "type",
+                      "sn",
+                      "cpumon",
+                      "model",
+                      "sec",
+                      "status",
+                      "amc",
+                      "expiry",
+                      "rem",
+                      "act",
+                    ]
+                      .slice(0, colCount)
+                      .map((col) => (
+                        <TableCell key={`skel-${i}-${col}`}>
+                          <Skeleton className="h-4 w-full" />
+                        </TableCell>
+                      ))}
                   </TableRow>
                 ))
               ) : filteredDevices.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isLoggedIn ? 10 : 9}
+                    colSpan={colCount}
                     className="text-center py-10 text-muted-foreground"
                     data-ocid="stock.empty_state"
                   >
@@ -819,11 +1125,27 @@ export default function StockData() {
                     <TableCell className="font-mono text-sm">
                       {device.serialNumber}
                     </TableCell>
+                    <TableCell>
+                      {device.deviceType === "Micro Computer" ? (
+                        <div className="text-xs space-y-0.5">
+                          <div className="font-mono">
+                            <span className="text-muted-foreground">CPU: </span>
+                            {device.cpuSerialNumber || "—"}
+                          </div>
+                          <div className="font-mono">
+                            <span className="text-muted-foreground">MON: </span>
+                            {device.monitorSerialNumber || "—"}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm">
                       {device.makeAndModel ?? device.companyName ?? "—"}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {device.sectionId || "—"}
+                      {getSectionDisplay(device.sectionId) || "—"}
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={device.workingStatus ?? "Others"} />
@@ -919,6 +1241,45 @@ export default function StockData() {
               />
             </div>
 
+            {/* CPU / Monitor Serial Numbers — only for Micro Computer */}
+            {formState.deviceType === "Micro Computer" && (
+              <>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground italic mb-2">
+                    Used for Micro Computer component tracking
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label>CPU Serial Number</Label>
+                  <Input
+                    value={formState.cpuSerialNumber}
+                    onChange={(e) =>
+                      setFormState((p) => ({
+                        ...p,
+                        cpuSerialNumber: e.target.value,
+                      }))
+                    }
+                    placeholder="CPU S/N"
+                    data-ocid="stock.input"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Monitor Serial Number</Label>
+                  <Input
+                    value={formState.monitorSerialNumber}
+                    onChange={(e) =>
+                      setFormState((p) => ({
+                        ...p,
+                        monitorSerialNumber: e.target.value,
+                      }))
+                    }
+                    placeholder="Monitor S/N"
+                    data-ocid="stock.input"
+                  />
+                </div>
+              </>
+            )}
+
             {/* Make and Model */}
             <div className="col-span-2 space-y-1">
               <Label>Make and Model</Label>
@@ -940,7 +1301,13 @@ export default function StockData() {
                   setFormState((p) => ({ ...p, section: e.target.value }))
                 }
                 placeholder="e.g. D1"
+                list="section-suggestions"
               />
+              <datalist id="section-suggestions">
+                {sections.map((s: any) => (
+                  <option key={s.id} value={s.name} />
+                ))}
+              </datalist>
             </div>
 
             {/* IP Address */}

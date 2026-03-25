@@ -37,16 +37,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   CheckCircle2,
   Download,
   Edit2,
   FileSpreadsheet,
-  FileText,
   Loader2,
   Monitor,
   Plus,
@@ -57,75 +54,111 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Computer } from "../backend";
-import type { Variant_active_standby_retired } from "../backend";
-import { ExternalBlob } from "../backend";
+import type { Seat } from "../backend";
 import { useAdmin } from "../contexts/AdminContext";
 import { useActor } from "../hooks/useActor";
 import {
-  useCreateComputer,
-  useCreateSection,
-  useDeleteComputer,
-  useGetAllComputers,
+  useCreateSeat,
+  useDeleteSeat,
+  useGetAllDevices,
+  useGetAllSeats,
   useGetAllSections,
-  useUpdateComputer,
+  useUpdateSeat,
 } from "../hooks/useQueries";
-import {
-  bigIntToDateStr,
-  dateToBigInt,
-  getAMCStatus,
-} from "../utils/formatters";
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+interface SystemRow {
+  seatId: string;
+  seatNumber: string;
+  currentUser: string;
+  sectionId: string;
+  systemType: string; // "Micro Computer" | "All-in-One PC" | "Desktop"
+  cpuSerial: string;
+  cpuModel: string;
+  monitorSerial: string;
+  monitorModel: string;
+  ip1: string;
+  ip2: string;
+  remarks: string;
+}
 
 const emptyForm = () => ({
   sectionId: "",
   seatNumber: "",
   currentUser: "",
-  serialNumber: "",
-  model: "",
-  brand: "",
-  companyName: "",
-  amcCompany: "",
+  cpuSerial: "",
   monitorSerial: "",
-  monitorModel: "",
   ip1: "",
   ip2: "",
   remarks: "",
-  purchaseDate: "",
-  amcStartDate: "",
-  amcEndDate: "",
-  status: "active" as "active" | "standby" | "retired",
-  notes: "",
 });
+
+const SECTION_ORDER = [
+  "officers",
+  "d1",
+  "d2",
+  "d5",
+  "d3",
+  "d4",
+  "dss",
+  "utilities",
+];
+
+const normalizeSectionName = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/\bd\s+i\b/g, "d1")
+    .replace(/\bd\s+ii\b/g, "d2")
+    .replace(/\bd\s+iii\b/g, "d3")
+    .replace(/\bd\s+iv\b/g, "d4")
+    .replace(/\bd\s+v\b/g, "d5")
+    .replace(/\s+/g, "");
+
+const getSeatRank = (seat: string) => {
+  const s = (seat || "").trim().toLowerCase();
+  if (s === "so") return 0;
+  const num = Number.parseInt(s, 10);
+  if (!Number.isNaN(num)) return 1000 + num;
+  if (s.includes("computer assistant") || s.includes("ca")) return 9000;
+  return 10000;
+};
 
 export default function Computers() {
   const { isLoggedIn } = useAdmin();
-  const { data: computers = [], isLoading } = useGetAllComputers();
+  const { data: seats = [], isLoading: seatsLoading } = useGetAllSeats();
+  const { data: devices = [], isLoading: devicesLoading } = useGetAllDevices();
   const { data: sections = [] } = useGetAllSections();
-  const createComputerMutation = useCreateComputer();
-  const updateMutation = useUpdateComputer();
-  const deleteMutation = useDeleteComputer();
-  const createSectionMutation = useCreateSection();
+  const createSeat = useCreateSeat();
+  const updateSeat = useUpdateSeat();
+  const deleteSeat = useDeleteSeat();
   const { actor, isFetching: isActorFetching } = useActor();
-  const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [editingComputer, setEditingComputer] = useState<Computer | null>(null);
+  const [editingSeat, setEditingSeat] = useState<Seat | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [datasheetFile, setDatasheetFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   // ---- Data Import state ----
+  const CSV_IMPORT_HEADERS = [
+    "Section Name",
+    "Seat Number",
+    "Current User",
+    "CPU Serial Number",
+    "Monitor Serial Number",
+    "IP 1",
+    "IP 2",
+    "Remarks",
+  ];
   const [importRows, setImportRows] = useState<
     Array<{
       sectionName: string;
       seat: string;
       currentUser: string;
       cpuSerial: string;
-      cpuModel: string;
       monitorSerial: string;
-      monitorModel: string;
       ip1: string;
       ip2: string;
       remarks: string;
@@ -140,28 +173,13 @@ export default function Computers() {
   const [importErrors, setImportErrors] = useState(0);
   const importFileRef = useRef<HTMLInputElement>(null);
 
-  const CSV_IMPORT_HEADERS = [
-    "Section Name",
-    "Seat",
-    "Current User Name",
-    "CPU Serial Number",
-    "CPU Model",
-    "Monitor Serial Number",
-    "Monitor Model",
-    "IP 1",
-    "IP 2",
-    "Remarks",
-  ];
-
   function parseCSVLine(line: string): string[] {
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === "," && !inQuotes) {
+    for (const char of line) {
+      if (char === '"') inQuotes = !inQuotes;
+      else if (char === "," && !inQuotes) {
         result.push(current);
         current = "";
       } else {
@@ -195,12 +213,10 @@ export default function Computers() {
           seat: (cols[1] ?? "").trim(),
           currentUser: (cols[2] ?? "").trim(),
           cpuSerial: (cols[3] ?? "").trim(),
-          cpuModel: (cols[4] ?? "").trim(),
-          monitorSerial: (cols[5] ?? "").trim(),
-          monitorModel: (cols[6] ?? "").trim(),
-          ip1: (cols[7] ?? "").trim(),
-          ip2: (cols[8] ?? "").trim(),
-          remarks: (cols[9] ?? "").trim(),
+          monitorSerial: (cols[4] ?? "").trim(),
+          ip1: (cols[5] ?? "").trim(),
+          ip2: (cols[6] ?? "").trim(),
+          remarks: (cols[7] ?? "").trim(),
         };
       })
       .filter((r) => r.sectionName || r.cpuSerial || r.seat);
@@ -215,19 +231,13 @@ export default function Computers() {
   };
 
   const downloadImportTemplate = () => {
-    const blob = new Blob(
-      [
-        `${CSV_IMPORT_HEADERS.join(",")}
-`,
-      ],
-      {
-        type: "text/csv;charset=utf-8;",
-      },
-    );
+    const blob = new Blob([`${CSV_IMPORT_HEADERS.join(",")}\n`], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "device_import_template.csv";
+    link.download = "computers_import_template.csv";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -235,35 +245,36 @@ export default function Computers() {
   };
 
   const downloadExportCSV = () => {
-    const rows = computers.map((c, i) => {
-      const sec = sections.find((s) => s.id === c.sectionId);
-      return [
+    const rows = systemRows.map((r, i) =>
+      [
         i + 1,
-        sec?.name ?? "",
-        c.seatNumber,
-        c.currentUser,
-        c.model,
-        c.serialNumber,
-        c.monitorModel,
-        c.monitorSerial,
-        c.ip1,
-        c.ip2,
-        c.remarks,
+        sections.find((s) => s.id === r.sectionId)?.name ?? "",
+        r.seatNumber,
+        r.currentUser,
+        r.systemType,
+        r.cpuSerial,
+        r.cpuModel,
+        r.monitorSerial,
+        r.monitorModel,
+        r.ip1,
+        r.ip2,
+        r.remarks,
       ]
         .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
-        .join(",");
-    });
+        .join(","),
+    );
     const header = [
       "Sl No",
-      "Section Name",
+      "Section",
       "Seat",
       "Current User",
-      "CPU Model",
+      "System Type",
       "CPU Serial",
-      "Monitor Model",
+      "CPU Model",
       "Monitor Serial",
-      "IP 1",
-      "IP 2",
+      "Monitor Model",
+      "IP1",
+      "IP2",
       "Remarks",
     ].join(",");
     const blob = new Blob([[header, ...rows].join("\n")], {
@@ -299,11 +310,11 @@ export default function Computers() {
     for (let i = 0; i < importRows.length; i++) {
       const row = importRows[i];
       try {
-        const sectionKey = row.sectionName.toLowerCase();
-        let sectionId = sectionMap.get(sectionKey);
+        const key = row.sectionName.toLowerCase();
+        let sectionId = sectionMap.get(key);
         if (!sectionId && row.sectionName) {
           const newId = crypto.randomUUID();
-          await createSectionMutation.mutateAsync({
+          await (actor as any).createSection({
             id: newId,
             name: row.sectionName,
             description: "",
@@ -311,33 +322,23 @@ export default function Computers() {
             createdAt: BigInt(Date.now()),
           });
           sectionId = newId;
-          sectionMap.set(sectionKey, newId);
+          sectionMap.set(key, newId);
         }
         if (!sectionId) {
           errors++;
           setImportProgress(Math.round(((i + 1) / importRows.length) * 100));
           continue;
         }
-        await createComputerMutation.mutateAsync({
+        await createSeat.mutateAsync({
           id: crypto.randomUUID(),
           sectionId,
           seatNumber: row.seat,
           currentUser: row.currentUser,
-          serialNumber: row.cpuSerial,
-          model: row.cpuModel,
-          brand: "",
-          companyName: "",
-          amcCompany: "",
+          cpuSerial: row.cpuSerial,
           monitorSerial: row.monitorSerial,
-          monitorModel: row.monitorModel,
           ip1: row.ip1,
           ip2: row.ip2,
           remarks: row.remarks,
-          purchaseDate: BigInt(0),
-          amcStartDate: BigInt(0),
-          amcEndDate: BigInt(0),
-          status: "active" as Variant_active_standby_retired,
-          notes: "",
           createdAt: BigInt(Date.now()),
         });
         successes++;
@@ -346,15 +347,12 @@ export default function Computers() {
       }
       setImportProgress(Math.round(((i + 1) / importRows.length) * 100));
     }
-    await queryClient.invalidateQueries({ queryKey: ["computers"] });
-    await queryClient.invalidateQueries({ queryKey: ["sections"] });
     setImportSuccess(successes);
     setImportErrors(errors);
     setIsImporting(false);
     setImportDone(true);
-    if (errors === 0)
-      toast.success(`${successes} devices imported successfully`);
-    else toast.error(`Import: ${successes} succeeded, ${errors} failed`);
+    if (errors === 0) toast.success(`${successes} seats imported`);
+    else toast.error(`Import: ${successes} ok, ${errors} failed`);
   };
 
   const resetImport = () => {
@@ -366,189 +364,63 @@ export default function Computers() {
     setImportErrors(0);
     if (importFileRef.current) importFileRef.current.value = "";
   };
-  // ---- End Data Import state ----
 
-  const openAdd = () => {
-    setEditingComputer(null);
-    setForm(emptyForm());
-    setDatasheetFile(null);
-    setUploadProgress(0);
-    setDialogOpen(true);
-  };
+  // ─── Build system rows from Seat + Device data ───────────────────────────────
+  const deviceBySerial = new Map(devices.map((d) => [d.serialNumber, d]));
 
-  const openEdit = (computer: Computer) => {
-    setEditingComputer(computer);
-    setForm({
-      sectionId: computer.sectionId,
-      seatNumber: computer.seatNumber,
-      currentUser: computer.currentUser,
-      serialNumber: computer.serialNumber,
-      model: computer.model,
-      brand: computer.brand,
-      companyName: computer.companyName ?? "",
-      amcCompany: computer.amcCompany ?? "",
-      monitorSerial: computer.monitorSerial,
-      monitorModel: computer.monitorModel,
-      ip1: computer.ip1,
-      ip2: computer.ip2,
-      remarks: computer.remarks,
-      purchaseDate: bigIntToDateStr(computer.purchaseDate),
-      amcStartDate: bigIntToDateStr(computer.amcStartDate),
-      amcEndDate: bigIntToDateStr(computer.amcEndDate),
-      status: computer.status as "active" | "standby" | "retired",
-      notes: computer.notes,
-    });
-    setDatasheetFile(null);
-    setUploadProgress(0);
-    setDialogOpen(true);
-  };
+  const systemRows: SystemRow[] = seats.map((seat) => {
+    const cpuDev = deviceBySerial.get(seat.cpuSerial);
+    const monitorDev = deviceBySerial.get(seat.monitorSerial);
 
-  const openDelete = (id: string) => {
-    setDeletingId(id);
-    setDeleteDialogOpen(true);
-  };
+    // Determine system type
+    let systemType = "Desktop";
+    let cpuSerial = seat.cpuSerial;
+    let monitorSerial = seat.monitorSerial;
+    let cpuModel = cpuDev?.makeAndModel ?? "";
+    const monitorModel = monitorDev?.makeAndModel ?? "";
 
-  const handleSubmit = async () => {
-    if (!form.serialNumber.trim() || !form.model.trim() || !form.sectionId) {
-      toast.error("Serial number, model, and section are required");
-      return;
+    if (cpuDev?.deviceType === "Micro Computer") {
+      systemType = "Micro Computer";
+      cpuSerial = cpuDev.cpuSerialNumber || seat.cpuSerial;
+      monitorSerial = cpuDev.monitorSerialNumber || seat.monitorSerial;
+      cpuModel = cpuDev.makeAndModel;
+    } else if (cpuDev?.deviceType === "All-in-One PC") {
+      systemType = "All-in-One PC";
     }
 
-    let datasheetBlob: ExternalBlob | undefined =
-      editingComputer?.datasheetBlob;
-
-    if (datasheetFile) {
-      try {
-        const bytes = new Uint8Array(await datasheetFile.arrayBuffer());
-        datasheetBlob = ExternalBlob.fromBytes(bytes).withUploadProgress(
-          (pct) => setUploadProgress(Math.round(pct)),
-        );
-      } catch {
-        toast.error("Failed to prepare datasheet");
-        return;
-      }
-    }
-
-    const computerData: Computer = {
-      id: editingComputer?.id ?? crypto.randomUUID(),
-      sectionId: form.sectionId,
-      seatNumber: form.seatNumber,
-      currentUser: form.currentUser,
-      serialNumber: form.serialNumber,
-      model: form.model,
-      brand: form.brand,
-      companyName: form.companyName,
-      amcCompany: form.amcCompany,
-      monitorSerial: form.monitorSerial,
-      monitorModel: form.monitorModel,
-      ip1: form.ip1,
-      ip2: form.ip2,
-      remarks: form.remarks,
-      purchaseDate: dateToBigInt(form.purchaseDate),
-      amcStartDate: dateToBigInt(form.amcStartDate),
-      amcEndDate: dateToBigInt(form.amcEndDate),
-      status: form.status as Variant_active_standby_retired,
-      notes: form.notes,
-      datasheetBlob,
-      createdAt: editingComputer?.createdAt ?? BigInt(Date.now()),
+    return {
+      seatId: seat.id,
+      seatNumber: seat.seatNumber,
+      currentUser: seat.currentUser,
+      sectionId: seat.sectionId,
+      systemType,
+      cpuSerial,
+      cpuModel,
+      monitorSerial,
+      monitorModel,
+      ip1: seat.ip1,
+      ip2: seat.ip2,
+      remarks: seat.remarks,
     };
-
-    try {
-      if (editingComputer) {
-        await updateMutation.mutateAsync(computerData);
-        toast.success("Computer updated");
-      } else {
-        await createComputerMutation.mutateAsync(computerData);
-        toast.success("Computer created");
-      }
-      setDialogOpen(false);
-    } catch {
-      toast.error("Failed to save computer");
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!deletingId) return;
-    try {
-      await deleteMutation.mutateAsync(deletingId);
-      toast.success("Computer deleted");
-      setDeleteDialogOpen(false);
-    } catch {
-      toast.error("Failed to delete computer");
-    }
-  };
-
-  const isPending =
-    createComputerMutation.isPending || updateMutation.isPending;
-
-  // Fixed section name ordering
-  const SECTION_ORDER = [
-    "officers",
-    "d1",
-    "d2",
-    "d5",
-    "d3",
-    "d4",
-    "dss",
-    "utilities",
-  ];
-
-  // Normalize section names: treat roman numeral variants as their numeric equivalents
-  const normalizeSectionName = (name: string) => {
-    return name
-      .trim()
-      .toLowerCase()
-      .replace(/\bd\s+i\b/g, "d1")
-      .replace(/\bd\s+ii\b/g, "d2")
-      .replace(/\bd\s+iii\b/g, "d3")
-      .replace(/\bd\s+iv\b/g, "d4")
-      .replace(/\bd\s+v\b/g, "d5")
-      .replace(/\s+/g, ""); // collapse remaining spaces
-  };
-
-  // Sort seats: SO first, then numeric ascending, then Computer Assistants, then others
-  const sortSeats = (comps: typeof computers) => {
-    return [...comps].sort((a, b) => {
-      const getSeatRank = (seat: string) => {
-        const s = (seat || "").trim().toLowerCase();
-        if (s === "so") return 0;
-        const num = Number.parseInt(s, 10);
-        if (!Number.isNaN(num)) return 1000 + num;
-        if (s.includes("computer assistant") || s.includes("ca")) return 9000;
-        return 10000;
-      };
-      const rankA = getSeatRank(a.seatNumber);
-      const rankB = getSeatRank(b.seatNumber);
-      if (rankA !== rankB) return rankA - rankB;
-      return (a.seatNumber || "").localeCompare(b.seatNumber || "");
-    });
-  };
-
-  // Group computers by section
-  const groupedComputers = computers.reduce<Record<string, typeof computers>>(
-    (acc, computer) => {
-      const key = computer.sectionId || "__unassigned__";
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(computer);
-      return acc;
-    },
-    {},
-  );
-
-  // Build ordered list of section keys by SECTION_ORDER, remaining sections after, then unassigned
-  const sectionsSortedByOrder = sections.slice().sort((a, b) => {
-    const ai = SECTION_ORDER.indexOf(normalizeSectionName(a.name));
-    const bi = SECTION_ORDER.indexOf(normalizeSectionName(b.name));
-    const ar = ai === -1 ? 9999 : ai;
-    const br = bi === -1 ? 9999 : bi;
-    return ar - br;
   });
 
-  const orderedSectionKeys = [
-    ...sectionsSortedByOrder
-      .map((s) => s.id)
-      .filter((id) => groupedComputers[id]),
-    ...(groupedComputers.__unassigned__ ? ["__unassigned__"] : []),
+  // ─── Group and sort ───────────────────────────────────────────────────────────
+  const grouped = systemRows.reduce<Record<string, SystemRow[]>>((acc, row) => {
+    const key = row.sectionId || "__unassigned__";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
+    return acc;
+  }, {});
+
+  const sectionsSorted = [...sections].sort((a, b) => {
+    const ai = SECTION_ORDER.indexOf(normalizeSectionName(a.name));
+    const bi = SECTION_ORDER.indexOf(normalizeSectionName(b.name));
+    return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+  });
+
+  const orderedKeys = [
+    ...sectionsSorted.map((s) => s.id).filter((id) => grouped[id]),
+    ...(grouped.__unassigned__ ? ["__unassigned__"] : []),
   ];
 
   const getSectionLabel = (key: string) =>
@@ -556,10 +428,88 @@ export default function Computers() {
       ? "Unassigned"
       : (sections.find((s) => s.id === key)?.name ?? key);
 
-  const getSectionDescription = (key: string) =>
-    key === "__unassigned__"
-      ? ""
-      : (sections.find((s) => s.id === key)?.description ?? "");
+  const sortBySeats = (rows: SystemRow[]) =>
+    [...rows].sort((a, b) => {
+      const ra = getSeatRank(a.seatNumber);
+      const rb = getSeatRank(b.seatNumber);
+      return ra !== rb ? ra - rb : a.seatNumber.localeCompare(b.seatNumber);
+    });
+
+  const isLoading = seatsLoading || devicesLoading;
+
+  // ─── Add/Edit form ────────────────────────────────────────────────────────────
+  const openAdd = () => {
+    setEditingSeat(null);
+    setForm(emptyForm());
+    setDialogOpen(true);
+  };
+
+  const openEdit = (row: SystemRow) => {
+    const seat = seats.find((s) => s.id === row.seatId);
+    if (!seat) return;
+    setEditingSeat(seat);
+    setForm({
+      sectionId: seat.sectionId,
+      seatNumber: seat.seatNumber,
+      currentUser: seat.currentUser,
+      cpuSerial: seat.cpuSerial,
+      monitorSerial: seat.monitorSerial,
+      ip1: seat.ip1,
+      ip2: seat.ip2,
+      remarks: seat.remarks,
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.sectionId) {
+      toast.error("Section is required");
+      return;
+    }
+    const seatData: Seat = {
+      id: editingSeat?.id ?? crypto.randomUUID(),
+      sectionId: form.sectionId,
+      seatNumber: form.seatNumber,
+      currentUser: form.currentUser,
+      cpuSerial: form.cpuSerial,
+      monitorSerial: form.monitorSerial,
+      ip1: form.ip1,
+      ip2: form.ip2,
+      remarks: form.remarks,
+      createdAt: editingSeat?.createdAt ?? BigInt(Date.now()),
+    };
+    try {
+      if (editingSeat) {
+        await updateSeat.mutateAsync(seatData);
+        toast.success("Seat updated");
+      } else {
+        await createSeat.mutateAsync(seatData);
+        toast.success("Seat added");
+      }
+      setDialogOpen(false);
+    } catch {
+      toast.error("Failed to save");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingId) return;
+    try {
+      await deleteSeat.mutateAsync(deletingId);
+      toast.success("Seat removed");
+      setDeleteDialogOpen(false);
+    } catch {
+      toast.error("Failed to delete");
+    }
+  };
+
+  const isPending = createSeat.isPending || updateSeat.isPending;
+
+  const SYSTEM_TYPE_COLORS: Record<string, string> = {
+    "Micro Computer": "bg-cyan-100 text-cyan-700 border-cyan-200",
+    "All-in-One PC": "bg-violet-100 text-violet-700 border-violet-200",
+    Desktop: "bg-blue-100 text-blue-700 border-blue-200",
+  };
 
   return (
     <div className="space-y-6 animate-fade-in" data-ocid="computers.section">
@@ -569,7 +519,7 @@ export default function Computers() {
             Computers
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage registered computers with AMC details and serial numbers
+            Seat-wise system view — one row per workstation
           </p>
         </div>
         {isLoggedIn && (
@@ -579,8 +529,7 @@ export default function Computers() {
             className="gap-2"
             data-ocid="computers.primary_button"
           >
-            <Plus className="w-4 h-4" />
-            Add Computer
+            <Plus className="w-4 h-4" /> Add Seat
           </Button>
         )}
       </div>
@@ -595,56 +544,42 @@ export default function Computers() {
               <Skeleton className="h-6 w-48" />
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
             </div>
           ))}
         </div>
-      ) : computers.length === 0 ? (
+      ) : systemRows.length === 0 ? (
         <div
           className="rounded-xl border border-border bg-card shadow-card flex flex-col items-center justify-center py-16 text-muted-foreground gap-3"
           data-ocid="computers.empty_state"
         >
           <Monitor className="w-12 h-12 opacity-30" />
-          <p className="font-display font-semibold">No computers registered</p>
+          <p className="font-display font-semibold">No systems found</p>
           <p className="text-sm">
             {isLoggedIn
-              ? "Add the first computer to get started"
-              : "No computers have been added yet"}
+              ? "Import stock data or add a seat to get started"
+              : "No computers have been assigned yet"}
           </p>
         </div>
       ) : (
         <div className="space-y-5">
-          {orderedSectionKeys.map((sectionKey, sectionIdx) => {
-            const rawSectionComputers = groupedComputers[sectionKey];
-            const sectionComputers = sortSeats(rawSectionComputers);
+          {orderedKeys.map((sectionKey, sectionIdx) => {
+            const rows = sortBySeats(grouped[sectionKey]);
             const label = getSectionLabel(sectionKey);
-            const description = getSectionDescription(sectionKey);
             return (
               <div
                 key={sectionKey}
                 className="rounded-xl border border-border bg-card shadow-card overflow-hidden"
                 data-ocid={`computers.card.${sectionIdx + 1}`}
               >
-                {/* Section heading */}
                 <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
                   <Monitor className="w-4 h-4 text-primary opacity-70" />
-                  <div className="flex flex-col min-w-0">
-                    <h3 className="font-display font-bold text-base text-foreground tracking-tight">
-                      {label}
-                    </h3>
-                    {description && (
-                      <p className="text-xs text-muted-foreground leading-tight mt-0.5">
-                        {description}
-                      </p>
-                    )}
-                  </div>
-                  <span className="ml-auto text-xs text-muted-foreground font-medium flex-shrink-0">
-                    {sectionComputers.length}{" "}
-                    {sectionComputers.length === 1 ? "device" : "devices"}
+                  <h3 className="font-display font-bold text-base text-foreground tracking-tight">
+                    {label}
+                  </h3>
+                  <span className="ml-auto text-xs text-muted-foreground font-medium">
+                    {rows.length} {rows.length === 1 ? "system" : "systems"}
                   </span>
                 </div>
-
-                {/* Table */}
                 <div className="overflow-x-auto">
                   <Table data-ocid="computers.table">
                     <TableHeader>
@@ -653,28 +588,28 @@ export default function Computers() {
                           Sl No
                         </TableHead>
                         <TableHead className="font-display text-xs uppercase tracking-wide">
-                          Seat No
+                          Seat
                         </TableHead>
                         <TableHead className="font-display text-xs uppercase tracking-wide">
                           Current User
                         </TableHead>
                         <TableHead className="font-display text-xs uppercase tracking-wide">
-                          CPU Model
+                          System Type
                         </TableHead>
                         <TableHead className="font-display text-xs uppercase tracking-wide">
-                          CPU Serial No
+                          CPU / Main Serial
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          CPU / Main Model
+                        </TableHead>
+                        <TableHead className="font-display text-xs uppercase tracking-wide">
+                          Monitor Serial
                         </TableHead>
                         <TableHead className="font-display text-xs uppercase tracking-wide">
                           Monitor Model
                         </TableHead>
                         <TableHead className="font-display text-xs uppercase tracking-wide">
-                          Monitor Serial No
-                        </TableHead>
-                        <TableHead className="font-display text-xs uppercase tracking-wide">
-                          IP1
-                        </TableHead>
-                        <TableHead className="font-display text-xs uppercase tracking-wide">
-                          IP2
+                          IP
                         </TableHead>
                         <TableHead className="font-display text-xs uppercase tracking-wide">
                           Remarks
@@ -687,67 +622,92 @@ export default function Computers() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sectionComputers.map((computer, idx) => {
-                        const amcStatus = getAMCStatus(computer.amcEndDate);
+                      {rows.map((row, idx) => {
+                        const isMicro = row.systemType === "Micro Computer";
+                        const isAIO = row.systemType === "All-in-One PC";
                         return (
                           <TableRow
-                            key={computer.id}
+                            key={row.seatId}
                             data-ocid={`computers.row.${idx + 1}`}
-                            className={cn(
-                              "transition-colors hover:bg-muted/20",
-                              amcStatus === "expired" && "amc-expired",
-                              amcStatus === "expiring" && "amc-expiring",
-                            )}
+                            className="transition-colors hover:bg-muted/20"
                           >
                             <TableCell className="text-xs text-muted-foreground font-medium text-center">
                               {idx + 1}
                             </TableCell>
                             <TableCell className="text-sm font-medium">
-                              {computer.seatNumber || "—"}
+                              {row.seatNumber || "—"}
                             </TableCell>
                             <TableCell className="text-sm">
-                              {computer.currentUser || "—"}
+                              {row.currentUser || "—"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs",
+                                  SYSTEM_TYPE_COLORS[row.systemType] ??
+                                    SYSTEM_TYPE_COLORS.Desktop,
+                                )}
+                              >
+                                {row.systemType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {row.cpuSerial ? (
+                                row.cpuSerial
+                              ) : isAIO ? (
+                                <span className="text-muted-foreground/60">
+                                  —
+                                </span>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs text-orange-500 border-orange-300"
+                                >
+                                  CPU Missing
+                                </Badge>
+                              )}
                             </TableCell>
                             <TableCell className="text-sm">
-                              {computer.model || "—"}
+                              {row.cpuModel || "—"}
                             </TableCell>
                             <TableCell className="font-mono text-xs text-muted-foreground">
-                              {computer.serialNumber || "—"}
+                              {isMicro || isAIO ? (
+                                isMicro && row.monitorSerial ? (
+                                  row.monitorSerial
+                                ) : (
+                                  <span className="text-muted-foreground/60">
+                                    —
+                                  </span>
+                                )
+                              ) : row.monitorSerial ? (
+                                row.monitorSerial
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs text-orange-500 border-orange-300"
+                                >
+                                  Monitor Missing
+                                </Badge>
+                              )}
                             </TableCell>
                             <TableCell className="text-sm">
-                              {computer.monitorModel || "—"}
+                              {row.monitorModel || "—"}
                             </TableCell>
                             <TableCell className="font-mono text-xs text-muted-foreground">
-                              {computer.monitorSerial || "—"}
+                              {row.ip1 || "—"}
                             </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground">
-                              {computer.ip1 || "—"}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground">
-                              {computer.ip2 || "—"}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
-                              {computer.remarks || "—"}
+                            <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">
+                              {row.remarks || "—"}
                             </TableCell>
                             {isLoggedIn && (
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-1">
-                                  {computer.datasheetBlob && (
-                                    <a
-                                      href={computer.datasheetBlob.getDirectURL()}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                                    >
-                                      <FileText className="w-3 h-3" />
-                                      Sheet
-                                    </a>
-                                  )}
                                   <Button
                                     size="icon"
                                     variant="ghost"
                                     className="h-7 w-7"
-                                    onClick={() => openEdit(computer)}
+                                    onClick={() => openEdit(row)}
                                     data-ocid={`computers.edit_button.${idx + 1}`}
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
@@ -756,7 +716,10 @@ export default function Computers() {
                                     size="icon"
                                     variant="ghost"
                                     className="h-7 w-7 hover:text-destructive"
-                                    onClick={() => openDelete(computer.id)}
+                                    onClick={() => {
+                                      setDeletingId(row.seatId);
+                                      setDeleteDialogOpen(true);
+                                    }}
                                     data-ocid={`computers.delete_button.${idx + 1}`}
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -776,7 +739,7 @@ export default function Computers() {
         </div>
       )}
 
-      {/* Computer Asset Data Import / Export */}
+      {/* ─── Computer Asset Data Import / Export ─── */}
       <div className="mt-8 space-y-4" data-ocid="computers.import.section">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -784,7 +747,7 @@ export default function Computers() {
               Computer Asset Data Import / Export
             </h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Bulk import device records from CSV or export current data
+              Bulk import seat records from CSV or export current data
             </p>
           </div>
           <div className="flex gap-2">
@@ -793,7 +756,6 @@ export default function Computers() {
               size="sm"
               className="gap-2"
               onClick={downloadImportTemplate}
-              data-ocid="computers.import.secondary_button"
             >
               <Download className="w-4 h-4" /> Download Template
             </Button>
@@ -802,7 +764,6 @@ export default function Computers() {
               size="sm"
               className="gap-2"
               onClick={downloadExportCSV}
-              data-ocid="computers.import.secondary_button"
             >
               <Download className="w-4 h-4" /> Export CSV
             </Button>
@@ -839,7 +800,6 @@ export default function Computers() {
                 if (f) handleImportFile(f);
               }}
               onClick={() => importFileRef.current?.click()}
-              data-ocid="computers.import.dropzone"
             >
               <input
                 ref={importFileRef}
@@ -850,7 +810,6 @@ export default function Computers() {
                   const f = e.target.files?.[0];
                   if (f) handleImportFile(f);
                 }}
-                data-ocid="computers.import.upload_button"
               />
               <div className="flex flex-col items-center justify-center py-10 gap-3 pointer-events-none">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -898,11 +857,6 @@ export default function Computers() {
             {importDone && !isImporting && (
               <div
                 className={`rounded-xl border p-4 ${importErrors === 0 ? "border-green-200 bg-green-50" : "border-yellow-200 bg-yellow-50"}`}
-                data-ocid={
-                  importErrors === 0
-                    ? "computers.import.success_state"
-                    : "computers.import.error_state"
-                }
               >
                 <div className="flex items-center gap-2">
                   {importErrors === 0 ? (
@@ -939,8 +893,7 @@ export default function Computers() {
                     className="gap-2 text-muted-foreground"
                     onClick={resetImport}
                   >
-                    <X className="w-4 h-4" />
-                    Clear
+                    <X className="w-4 h-4" /> Clear
                   </Button>
                   {importDone ? (
                     <Button
@@ -949,8 +902,7 @@ export default function Computers() {
                       className="gap-2"
                       onClick={resetImport}
                     >
-                      <RefreshCw className="w-4 h-4" />
-                      Import Another
+                      <RefreshCw className="w-4 h-4" /> Import Another
                     </Button>
                   ) : (
                     <Button
@@ -975,10 +927,7 @@ export default function Computers() {
             )}
           </>
         ) : (
-          <div
-            className="rounded-xl border-2 border-dashed border-border p-8 text-center text-muted-foreground"
-            data-ocid="computers.import.section"
-          >
+          <div className="rounded-xl border-2 border-dashed border-border p-8 text-center text-muted-foreground">
             <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 opacity-30" />
             <p className="font-semibold">Login required to import data</p>
             <p className="text-sm mt-1">
@@ -988,89 +937,27 @@ export default function Computers() {
         )}
       </div>
 
-      {/* Add/Edit Dialog */}
+      {/* ─── Add/Edit Seat Dialog ─── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent
-          className="max-w-2xl max-h-[90vh] overflow-y-auto"
-          data-ocid="computers.dialog"
-        >
+        <DialogContent className="max-w-lg" data-ocid="computers.dialog">
           <DialogHeader>
             <DialogTitle className="font-display">
-              {editingComputer ? "Edit Computer" : "Add New Computer"}
+              {editingSeat ? "Edit Seat" : "Add Seat"}
             </DialogTitle>
             <DialogDescription>
-              Fill in all required fields. AMC dates and serial number are
-              important for tracking.
+              {editingSeat
+                ? "Update seat details. Serial numbers can be managed from the Stock page."
+                : "Add a new seat assignment. Link it to devices already in Stock by serial number."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="c-serial">Serial Number *</Label>
-              <Input
-                id="c-serial"
-                placeholder="SN-XXXX-YYYY"
-                value={form.serialNumber}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, serialNumber: e.target.value }))
-                }
-                data-ocid="computers.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-model">Model *</Label>
-              <Input
-                id="c-model"
-                placeholder="e.g. ThinkPad X1 Carbon"
-                value={form.model}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, model: e.target.value }))
-                }
-                data-ocid="computers.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-brand">Brand</Label>
-              <Input
-                id="c-brand"
-                placeholder="e.g. Lenovo"
-                value={form.brand}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, brand: e.target.value }))
-                }
-                data-ocid="computers.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-company">Company Name</Label>
-              <Input
-                id="c-company"
-                placeholder="e.g. Acme Corp"
-                value={form.companyName}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, companyName: e.target.value }))
-                }
-                data-ocid="computers.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-amc-company">AMC Company</Label>
-              <Input
-                id="c-amc-company"
-                placeholder="e.g. TechCare Services"
-                value={form.amcCompany}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, amcCompany: e.target.value }))
-                }
-                data-ocid="computers.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-section">Section *</Label>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Section *</Label>
               <Select
                 value={form.sectionId}
                 onValueChange={(v) => setForm((f) => ({ ...f, sectionId: v }))}
               >
-                <SelectTrigger id="c-section" data-ocid="computers.select">
+                <SelectTrigger data-ocid="computers.select">
                   <SelectValue placeholder="Select section" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1083,10 +970,9 @@ export default function Computers() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="c-seat">Seat Number</Label>
+              <Label>Seat Number</Label>
               <Input
-                id="c-seat"
-                placeholder="e.g. A1, 12"
+                placeholder="e.g. 1, SO, CA"
                 value={form.seatNumber}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, seatNumber: e.target.value }))
@@ -1095,9 +981,8 @@ export default function Computers() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="c-user">Current User</Label>
+              <Label>Current User</Label>
               <Input
-                id="c-user"
                 placeholder="e.g. John Doe"
                 value={form.currentUser}
                 onChange={(e) =>
@@ -1107,67 +992,20 @@ export default function Computers() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="c-purchase">Purchase Date</Label>
+              <Label>CPU Serial Number</Label>
               <Input
-                id="c-purchase"
-                type="date"
-                value={form.purchaseDate}
+                placeholder="Serial from Stock"
+                value={form.cpuSerial}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, purchaseDate: e.target.value }))
+                  setForm((f) => ({ ...f, cpuSerial: e.target.value }))
                 }
                 data-ocid="computers.input"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="c-status">Status</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) =>
-                  setForm((f) => ({
-                    ...f,
-                    status: v as "active" | "standby" | "retired",
-                  }))
-                }
-              >
-                <SelectTrigger id="c-status" data-ocid="computers.select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="standby">Standby</SelectItem>
-                  <SelectItem value="retired">Retired</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-amc-start">AMC Start Date</Label>
+              <Label>Monitor Serial Number</Label>
               <Input
-                id="c-amc-start"
-                type="date"
-                value={form.amcStartDate}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, amcStartDate: e.target.value }))
-                }
-                data-ocid="computers.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-amc-end">AMC End Date</Label>
-              <Input
-                id="c-amc-end"
-                type="date"
-                value={form.amcEndDate}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, amcEndDate: e.target.value }))
-                }
-                data-ocid="computers.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-mon-serial">Monitor Serial</Label>
-              <Input
-                id="c-mon-serial"
-                placeholder="e.g. MON-12345"
+                placeholder="Serial from Stock"
                 value={form.monitorSerial}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, monitorSerial: e.target.value }))
@@ -1176,21 +1014,8 @@ export default function Computers() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="c-mon-model">Monitor Model</Label>
+              <Label>IP Address</Label>
               <Input
-                id="c-mon-model"
-                placeholder="e.g. Dell P2422H"
-                value={form.monitorModel}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, monitorModel: e.target.value }))
-                }
-                data-ocid="computers.input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="c-ip1">IP Address 1</Label>
-              <Input
-                id="c-ip1"
                 placeholder="e.g. 192.168.1.100"
                 value={form.ip1}
                 onChange={(e) =>
@@ -1200,10 +1025,9 @@ export default function Computers() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="c-ip2">IP Address 2</Label>
+              <Label>IP Address 2</Label>
               <Input
-                id="c-ip2"
-                placeholder="e.g. 10.0.0.50"
+                placeholder="optional"
                 value={form.ip2}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, ip2: e.target.value }))
@@ -1212,73 +1036,14 @@ export default function Computers() {
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="c-remarks">Remarks</Label>
-              <Textarea
-                id="c-remarks"
-                placeholder="Any remarks about this device..."
-                rows={2}
+              <Label>Remarks</Label>
+              <Input
+                placeholder="optional"
                 value={form.remarks}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, remarks: e.target.value }))
                 }
-                data-ocid="computers.textarea"
-              />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="c-datasheet">Datasheet Upload</Label>
-              <label
-                htmlFor="c-datasheet-input"
-                className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/30 transition-colors"
-                data-ocid="computers.upload_button"
-              >
-                <Upload className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  {datasheetFile
-                    ? datasheetFile.name
-                    : editingComputer?.datasheetBlob
-                      ? "Replace existing datasheet"
-                      : "Upload PDF or image"}
-                </span>
-              </label>
-              <input
-                id="c-datasheet-input"
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.webp"
-                className="hidden"
-                onChange={(e) => setDatasheetFile(e.target.files?.[0] ?? null)}
-                data-ocid="computers.upload_button"
-              />
-              {uploadProgress > 0 && uploadProgress < 100 && (
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              )}
-              {editingComputer?.datasheetBlob && !datasheetFile && (
-                <a
-                  href={editingComputer.datasheetBlob.getDirectURL()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  <FileText className="w-3 h-3" />
-                  View existing datasheet
-                </a>
-              )}
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="c-notes">Notes</Label>
-              <Textarea
-                id="c-notes"
-                placeholder="Any additional notes..."
-                rows={2}
-                value={form.notes}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, notes: e.target.value }))
-                }
-                data-ocid="computers.textarea"
+                data-ocid="computers.input"
               />
             </div>
           </div>
@@ -1296,22 +1061,22 @@ export default function Computers() {
               data-ocid="computers.submit_button"
             >
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingComputer ? "Update" : "Register"} Computer
+              {editingSeat ? "Update" : "Add"} Seat
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* ─── Delete Confirmation ─── */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent data-ocid="computers.dialog">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">
-              Delete Computer?
+              Remove Seat?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove the computer and all associated
-              records.
+              This will remove the seat assignment. The devices will remain in
+              Stock.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1323,10 +1088,10 @@ export default function Computers() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-ocid="computers.confirm_button"
             >
-              {deleteMutation.isPending && (
+              {deleteSeat.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Delete
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

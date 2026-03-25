@@ -331,6 +331,8 @@ export interface Device {
     previousSection: string;
     dateMovedToStandby: bigint;
     createdAt: bigint;
+    cpuSerialNumber: string;
+    monitorSerialNumber: string;
 }
 export interface Seat {
     id: string;

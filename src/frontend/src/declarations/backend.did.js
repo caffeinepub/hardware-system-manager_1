@@ -78,6 +78,8 @@ export const Device = IDL.Record({
   'previousSection': IDL.Text,
   'dateMovedToStandby': IDL.Int,
   'createdAt': IDL.Int,
+  'cpuSerialNumber': IDL.Text,
+  'monitorSerialNumber': IDL.Text,
 });
 
 export const Seat = IDL.Record({
@@ -219,6 +221,8 @@ export const idlFactory = ({ IDL }) => {
     'previousSection': IDL.Text,
     'dateMovedToStandby': IDL.Int,
     'createdAt': IDL.Int,
+    'cpuSerialNumber': IDL.Text,
+    'monitorSerialNumber': IDL.Text,
   });
   const Seat = IDL.Record({
     'id': IDL.Text,

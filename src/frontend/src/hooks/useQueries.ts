@@ -225,6 +225,8 @@ function otherDeviceToDevice(od: OtherDevice): Device {
     previousSection: "",
     dateMovedToStandby: 0n,
     createdAt: od.createdAt || BigInt(Date.now()) * 1_000_000n,
+    cpuSerialNumber: "",
+    monitorSerialNumber: "",
   };
 }
 
@@ -428,18 +430,182 @@ function computerToSeat(c: Computer): Seat {
   };
 }
 
+const COMPUTER_DEVICE_TYPES = new Set([
+  "CPU",
+  "Monitor",
+  "Micro Computer",
+  "All-in-One PC",
+]);
+
 export function useGetAllComputers() {
   const { actor, isFetching } = useActor();
   return useQuery<Computer[]>({
     queryKey: ["computers"],
     queryFn: async () => {
       if (!actor) return [];
-      const [seats, devices] = await Promise.all([
+      const [allSeats, allDevices] = await Promise.all([
         actor.getAllSeats(),
         actor.getAllDevices(),
       ]);
-      const deviceMap = new Map(devices.map((d) => [d.serialNumber, d]));
-      return seats.map((s) => seatToComputer(s, deviceMap));
+      const deviceMap = new Map(allDevices.map((d) => [d.serialNumber, d]));
+
+      // ── Step 1: Build from seats, merging seats with same sectionId+seatNumber ──
+      const mergedSeatMap = new Map<string, Computer>();
+      const seatIdOrder: string[] = [];
+
+      for (const seat of allSeats) {
+        const key = seat.seatNumber.trim()
+          ? `${seat.sectionId}::${seat.seatNumber.trim().toLowerCase()}`
+          : `__solo__${seat.id}`;
+
+        if (mergedSeatMap.has(key)) {
+          const existing = mergedSeatMap.get(key)!;
+          if (!existing.serialNumber && seat.cpuSerial)
+            existing.serialNumber = seat.cpuSerial;
+          if (!existing.monitorSerial && seat.monitorSerial)
+            existing.monitorSerial = seat.monitorSerial;
+          if (!existing.currentUser && seat.currentUser)
+            existing.currentUser = seat.currentUser;
+          if (!existing.model && seat.cpuSerial) {
+            const cpu = deviceMap.get(seat.cpuSerial);
+            if (cpu) {
+              existing.model = cpu.makeAndModel;
+              existing.brand = cpu.companyName;
+              existing.amcCompany = cpu.amcTeam;
+              existing.amcStartDate = cpu.amcStartDate;
+              existing.amcEndDate = cpu.amcExpiryDate;
+            }
+          }
+        } else {
+          const computer = seatToComputer(seat, deviceMap);
+          mergedSeatMap.set(key, computer);
+          seatIdOrder.push(key);
+        }
+      }
+
+      const computers: Computer[] = seatIdOrder.map(
+        (k) => mergedSeatMap.get(k)!,
+      );
+
+      // ── Step 2: Track ALL serials already covered by seats ──
+      const seatedSerials = new Set<string>();
+      for (const s of allSeats) {
+        if (s.cpuSerial) seatedSerials.add(s.cpuSerial);
+        if (s.monitorSerial) seatedSerials.add(s.monitorSerial);
+      }
+      for (const d of allDevices) {
+        if (d.deviceType === "Micro Computer" && d.assignedSeatId !== "") {
+          if (d.cpuSerialNumber) seatedSerials.add(d.cpuSerialNumber);
+          if (d.monitorSerialNumber) seatedSerials.add(d.monitorSerialNumber);
+        }
+      }
+
+      // ── Step 3: Handle unseat computer-type devices (section set, no seat) ──
+      const unseatDevices = allDevices.filter(
+        (d) =>
+          COMPUTER_DEVICE_TYPES.has(d.deviceType) &&
+          d.sectionId &&
+          d.assignedSeatId === "" &&
+          !seatedSerials.has(d.serialNumber),
+      );
+
+      const unseatBySectionCPU = new Map<string, (typeof unseatDevices)[0][]>();
+      const unseatBySectionMonitor = new Map<
+        string,
+        (typeof unseatDevices)[0][]
+      >();
+      const microAndAIO: typeof unseatDevices = [];
+
+      for (const d of unseatDevices) {
+        if (
+          d.deviceType === "Micro Computer" ||
+          d.deviceType === "All-in-One PC"
+        ) {
+          microAndAIO.push(d);
+        } else if (d.deviceType === "CPU") {
+          if (!unseatBySectionCPU.has(d.sectionId))
+            unseatBySectionCPU.set(d.sectionId, []);
+          unseatBySectionCPU.get(d.sectionId)!.push(d);
+        } else if (d.deviceType === "Monitor") {
+          if (!unseatBySectionMonitor.has(d.sectionId))
+            unseatBySectionMonitor.set(d.sectionId, []);
+          unseatBySectionMonitor.get(d.sectionId)!.push(d);
+        }
+      }
+
+      for (const device of microAndAIO) {
+        const cpuSerial =
+          device.deviceType === "Micro Computer"
+            ? device.cpuSerialNumber || device.serialNumber
+            : device.serialNumber;
+        const monitorSerial =
+          device.deviceType === "Micro Computer"
+            ? device.monitorSerialNumber || ""
+            : "";
+        computers.push({
+          id: device.id,
+          sectionId: device.sectionId,
+          seatNumber: "",
+          currentUser: "",
+          serialNumber: cpuSerial,
+          monitorSerial,
+          model: device.makeAndModel,
+          brand: device.companyName,
+          companyName: device.companyName,
+          amcCompany: device.amcTeam,
+          monitorModel: "",
+          ip1: device.ipAddress,
+          ip2: "",
+          remarks: device.remarks,
+          notes: "",
+          purchaseDate: 0n,
+          amcStartDate: device.amcStartDate,
+          amcEndDate: device.amcExpiryDate,
+          status: "active" as any,
+          datasheetBlob: undefined,
+          createdAt: device.createdAt,
+        });
+      }
+
+      const allSectionIds = new Set([
+        ...unseatBySectionCPU.keys(),
+        ...unseatBySectionMonitor.keys(),
+      ]);
+      for (const sectionId of allSectionIds) {
+        const cpus = unseatBySectionCPU.get(sectionId) || [];
+        const monitors = unseatBySectionMonitor.get(sectionId) || [];
+        const len = Math.max(cpus.length, monitors.length);
+        for (let i = 0; i < len; i++) {
+          const cpu = cpus[i];
+          const monitor = monitors[i];
+          const base = cpu || monitor;
+          computers.push({
+            id: base.id,
+            sectionId,
+            seatNumber: "",
+            currentUser: "",
+            serialNumber: cpu?.serialNumber || "",
+            monitorSerial: monitor?.serialNumber || "",
+            model: cpu?.makeAndModel || monitor?.makeAndModel || "",
+            brand: base.companyName,
+            companyName: base.companyName,
+            amcCompany: base.amcTeam,
+            monitorModel: "",
+            ip1: base.ipAddress,
+            ip2: "",
+            remarks: base.remarks,
+            notes: "",
+            purchaseDate: 0n,
+            amcStartDate: base.amcStartDate,
+            amcEndDate: base.amcExpiryDate,
+            status: "active" as any,
+            datasheetBlob: undefined,
+            createdAt: base.createdAt,
+          });
+        }
+      }
+
+      return computers;
     },
     enabled: !!actor && !isFetching,
   });
@@ -532,6 +698,8 @@ function standbyToDevice(ss: StandbySystem): Device {
     previousSection: ss.assignedSectionId ?? "",
     dateMovedToStandby: ss.createdAt,
     createdAt: ss.createdAt,
+    cpuSerialNumber: "",
+    monitorSerialNumber: "",
   };
 }
 

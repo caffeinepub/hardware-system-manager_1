@@ -17,6 +17,8 @@ export interface Device {
   previousSection: string;
   dateMovedToStandby: bigint;
   createdAt: bigint;
+  cpuSerialNumber: string;     // For Micro Computer
+  monitorSerialNumber: string; // For Micro Computer
 }
 
 export interface Seat {
@@ -71,16 +73,6 @@ export interface MovementLog {
   remarks: string;
 }
 
-export interface StockImportRow {
-  slNo: bigint;
-  companyAndModel: string;
-  cpuSlNo: string;
-  monitorSlNo: string;
-  amcStartDate: bigint;
-  amcExpiryDate: bigint;
-  amcTeam: string;
-}
-
 export interface UserProfile {
   name: string;
 }
@@ -100,22 +92,20 @@ export enum UserRole {
   guest = "guest"
 }
 
-// ── Legacy compat types (used by Computers.tsx / StandbySystems.tsx) ────────
 export type Variant_active_standby_retired = "active" | "standby" | "retired";
 export type ExternalBlob = Uint8Array;
 
-/** Legacy Computer record – maps to Seat + Device in the new backend. */
 export interface Computer {
   id: string;
   sectionId: string;
   seatNumber: string;
   currentUser: string;
-  serialNumber: string;   // cpuSerial
+  serialNumber: string;
   monitorSerial: string;
-  model: string;          // makeAndModel of CPU device
-  brand: string;          // companyName of CPU device
+  model: string;
+  brand: string;
   companyName: string;
-  amcCompany: string;     // amcTeam of CPU device
+  amcCompany: string;
   monitorModel: string;
   ip1: string;
   ip2: string;
@@ -129,17 +119,16 @@ export interface Computer {
   createdAt: bigint;
 }
 
-/** Legacy StandbySystem record – maps to Device (unassigned) in the new backend. */
 export interface StandbySystem {
   id: string;
   serialNumber: string;
-  model: string;          // makeAndModel
-  brand: string;          // deviceType (unit type)
+  model: string;
+  brand: string;
   condition: "good" | "fair" | "poor";
-  status: string;         // workingStatus
-  notes: string;          // remarks
-  assignedSectionId?: string; // previousSection
-  createdAt: bigint;      // dateMovedToStandby
+  status: string;
+  notes: string;
+  assignedSectionId?: string;
+  createdAt: bigint;
 }
 
 export interface backendInterface {
@@ -159,8 +148,6 @@ export interface backendInterface {
   getAllSeats(): Promise<Array<Seat>>;
   updateSeat(seat: Seat): Promise<void>;
   deleteSeat(id: string): Promise<void>;
-
-  importStockRow(row: StockImportRow): Promise<void>;
 
   createComplaint(complaint: Complaint): Promise<void>;
   getAllComplaints(): Promise<Array<Complaint>>;
