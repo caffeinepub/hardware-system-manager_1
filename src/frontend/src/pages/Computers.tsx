@@ -372,18 +372,28 @@ export default function Computers() {
     const cpuDev = deviceBySerial.get(seat.cpuSerial);
     const monitorDev = deviceBySerial.get(seat.monitorSerial);
 
-    // Determine system type
+    // Determine system type — also search for Micro Computer by component serial
+    const microDev =
+      cpuDev?.deviceType === "Micro Computer"
+        ? cpuDev
+        : devices.find(
+            (d) =>
+              d.deviceType === "Micro Computer" &&
+              (d.cpuSerialNumber === seat.cpuSerial ||
+                d.serialNumber === seat.cpuSerial),
+          );
+
     let systemType = "Desktop";
     let cpuSerial = seat.cpuSerial;
     let monitorSerial = seat.monitorSerial;
     let cpuModel = cpuDev?.makeAndModel ?? "";
     const monitorModel = monitorDev?.makeAndModel ?? "";
 
-    if (cpuDev?.deviceType === "Micro Computer") {
+    if (microDev) {
       systemType = "Micro Computer";
-      cpuSerial = cpuDev.cpuSerialNumber || seat.cpuSerial;
-      monitorSerial = cpuDev.monitorSerialNumber || seat.monitorSerial;
-      cpuModel = cpuDev.makeAndModel;
+      cpuSerial = microDev.cpuSerialNumber || seat.cpuSerial;
+      monitorSerial = microDev.monitorSerialNumber || seat.monitorSerial;
+      cpuModel = microDev.makeAndModel;
     } else if (cpuDev?.deviceType === "All-in-One PC") {
       systemType = "All-in-One PC";
     }
@@ -992,26 +1002,102 @@ export default function Computers() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>CPU Serial Number</Label>
-              <Input
-                placeholder="Serial from Stock"
-                value={form.cpuSerial}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, cpuSerial: e.target.value }))
+              <Label>CPU / Micro Computer Serial Number</Label>
+              <Select
+                value={form.cpuSerial || "__none__"}
+                onValueChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    cpuSerial: v === "__none__" ? "" : v,
+                  }))
                 }
-                data-ocid="computers.input"
-              />
+              >
+                <SelectTrigger data-ocid="computers.select">
+                  <SelectValue placeholder="Select standby CPU / Micro Computer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None / Clear —</SelectItem>
+                  {devices
+                    .filter(
+                      (d) =>
+                        (d.deviceType === "CPU" ||
+                          d.deviceType === "Micro Computer") &&
+                        (!d.sectionId || d.sectionId === ""),
+                    )
+                    .map((d) => (
+                      <SelectItem key={d.serialNumber} value={d.serialNumber}>
+                        {d.serialNumber} — {d.makeAndModel || d.deviceType}
+                      </SelectItem>
+                    ))}
+                  {form.cpuSerial &&
+                    form.cpuSerial !== "__none__" &&
+                    !devices.find(
+                      (d) =>
+                        d.serialNumber === form.cpuSerial &&
+                        (d.deviceType === "CPU" ||
+                          d.deviceType === "Micro Computer") &&
+                        (!d.sectionId || d.sectionId === ""),
+                    ) && (
+                      <SelectItem value={form.cpuSerial}>
+                        Current: {form.cpuSerial}
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
+              {form.cpuSerial && form.cpuSerial !== "__none__" && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {devices.find((d) => d.serialNumber === form.cpuSerial)
+                    ?.makeAndModel || ""}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Monitor Serial Number</Label>
-              <Input
-                placeholder="Serial from Stock"
-                value={form.monitorSerial}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, monitorSerial: e.target.value }))
+              <Select
+                value={form.monitorSerial || "__none__"}
+                onValueChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    monitorSerial: v === "__none__" ? "" : v,
+                  }))
                 }
-                data-ocid="computers.input"
-              />
+              >
+                <SelectTrigger data-ocid="computers.select">
+                  <SelectValue placeholder="Select standby Monitor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None / Clear —</SelectItem>
+                  {devices
+                    .filter(
+                      (d) =>
+                        d.deviceType === "Monitor" &&
+                        (!d.sectionId || d.sectionId === ""),
+                    )
+                    .map((d) => (
+                      <SelectItem key={d.serialNumber} value={d.serialNumber}>
+                        {d.serialNumber} — {d.makeAndModel || d.deviceType}
+                      </SelectItem>
+                    ))}
+                  {form.monitorSerial &&
+                    form.monitorSerial !== "__none__" &&
+                    !devices.find(
+                      (d) =>
+                        d.serialNumber === form.monitorSerial &&
+                        d.deviceType === "Monitor" &&
+                        (!d.sectionId || d.sectionId === ""),
+                    ) && (
+                      <SelectItem value={form.monitorSerial}>
+                        Current: {form.monitorSerial}
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
+              {form.monitorSerial && form.monitorSerial !== "__none__" && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {devices.find((d) => d.serialNumber === form.monitorSerial)
+                    ?.makeAndModel || ""}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>IP Address</Label>

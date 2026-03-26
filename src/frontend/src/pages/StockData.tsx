@@ -128,6 +128,7 @@ interface FormState {
   monitorSerialNumber: string;
   makeAndModel: string;
   section: string;
+  seatNumber: string;
   ipAddress: string;
   status: string;
   amcTeam: string;
@@ -143,6 +144,7 @@ const EMPTY_FORM: FormState = {
   monitorSerialNumber: "",
   makeAndModel: "",
   section: "",
+  seatNumber: "",
   ipAddress: "",
   status: "Available",
   amcTeam: "",
@@ -197,7 +199,11 @@ function parseUnifiedCSV(text: string): CsvRow[] {
         remarks: (cols[11] ?? "").trim(),
       };
     })
-    .filter((r) => r.serialNumber);
+    .filter(
+      (r) =>
+        r.serialNumber ||
+        (r.deviceType === "Micro Computer" && r.cpuSerialNumber),
+    );
 }
 
 function parseDateToBigInt(dateStr: string): bigint {
@@ -231,7 +237,7 @@ function downloadTemplate() {
     headers.join(","),
     "CPU,SN123456789,,,HP EliteDesk 800 G5,D1,,Available,TechAMC Solutions,01/04/2024,31/03/2025,Main workstation",
     "Monitor,MON987654321,,,Dell P2422H,D1,,Available,TechAMC Solutions,01/04/2024,31/03/2025,",
-    "Micro Computer,MC001,CPU-SN-001,MON-SN-001,Dell OptiPlex Micro,D2,,Available,TechAMC Solutions,01/04/2024,31/03/2025,Micro PC with paired monitor",
+    "Micro Computer,CPU-SN-001,CPU-SN-001,MON-SN-001,Dell OptiPlex Micro,D2,,Available,TechAMC Solutions,01/04/2024,31/03/2025,CPU SN used as identifier",
     "Printer,PRN001,,,HP LaserJet Pro M404n,Officers,,Working,PrintAMC,01/04/2024,31/03/2025,",
   ];
   const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -547,9 +553,12 @@ export default function StockData() {
       try {
         const sectionId = await getOrCreateSection(row.section);
 
+        const rowSerial =
+          row.serialNumber ||
+          (row.deviceType === "Micro Computer" ? row.cpuSerialNumber : "");
         const device: any = {
-          id: row.serialNumber,
-          serialNumber: row.serialNumber,
+          id: rowSerial,
+          serialNumber: rowSerial,
           deviceType: row.deviceType || "CPU",
           cpuSerialNumber: row.cpuSerialNumber ?? "",
           monitorSerialNumber: row.monitorSerialNumber ?? "",
@@ -579,17 +588,17 @@ export default function StockData() {
         if (
           sectionId &&
           COMPUTER_TYPES_SET.has(row.deviceType) &&
-          !seatedSerials.has(row.serialNumber)
+          !seatedSerials.has(rowSerial)
         ) {
           let cpuSerial = "";
           let monitorSerial = "";
           if (row.deviceType === "Monitor") {
-            monitorSerial = row.serialNumber;
+            monitorSerial = rowSerial;
           } else if (row.deviceType === "Micro Computer") {
-            cpuSerial = row.cpuSerialNumber || row.serialNumber;
+            cpuSerial = row.cpuSerialNumber || rowSerial;
             monitorSerial = row.monitorSerialNumber || "";
           } else {
-            cpuSerial = row.serialNumber;
+            cpuSerial = rowSerial;
           }
           try {
             await (actor as any).createSeat({
@@ -604,7 +613,7 @@ export default function StockData() {
               remarks: "",
               createdAt: BigInt(Date.now()),
             });
-            seatedSerials.add(row.serialNumber);
+            seatedSerials.add(rowSerial);
           } catch (se) {
             console.warn("Auto-seat creation failed:", se);
           }
@@ -652,6 +661,7 @@ export default function StockData() {
       makeAndModel: device.makeAndModel ?? device.companyName ?? "",
       section:
         (getSectionDisplay(device.sectionId ?? "") || device.sectionId) ?? "",
+      seatNumber: "",
       ipAddress: device.ipAddress ?? "",
       status: device.workingStatus ?? "Available",
       amcTeam: device.amcTeam ?? "",
@@ -669,14 +679,26 @@ export default function StockData() {
   };
 
   const handleSaveEntry = async () => {
-    if (!actor || !formState.serialNumber.trim()) {
-      toast.error("Serial Number is required");
+    const isMicroComputer = formState.deviceType === "Micro Computer";
+    // For Micro Computers, CPU SN is the identifier
+    const resolvedSerial =
+      isMicroComputer && !formState.serialNumber.trim()
+        ? formState.cpuSerialNumber.trim()
+        : formState.serialNumber.trim();
+    if (!actor || !resolvedSerial) {
+      toast.error(
+        isMicroComputer
+          ? "CPU Serial Number is required"
+          : "Serial Number is required",
+      );
       return;
+    }
+    // Auto-fill serialNumber from cpuSerialNumber for Micro Computers
+    if (isMicroComputer && !formState.serialNumber.trim()) {
+      setFormState((p) => ({ ...p, serialNumber: resolvedSerial }));
     }
     setIsSaving(true);
     try {
-      const isMicroComputer = formState.deviceType === "Micro Computer";
-
       // If editing a Micro Computer and CPU/Monitor SN changed, move old to standby
       if (editingDevice && isMicroComputer) {
         const oldCpu = editingDevice.cpuSerialNumber ?? "";
@@ -753,8 +775,8 @@ export default function StockData() {
       }
 
       const device = {
-        id: formState.serialNumber.trim(),
-        serialNumber: formState.serialNumber.trim(),
+        id: resolvedSerial,
+        serialNumber: resolvedSerial,
         deviceType: formState.deviceType,
         cpuSerialNumber: isMicroComputer
           ? formState.cpuSerialNumber.trim()
@@ -787,6 +809,56 @@ export default function StockData() {
       const resolvedSectionId = device.sectionId as string;
       if (resolvedSectionId && COMPUTER_TYPES_SET.has(formState.deviceType)) {
         await autoCreateSeat(device, resolvedSectionId);
+      }
+      // If seatNumber was provided, update/set the seat number
+      if (
+        formState.seatNumber.trim() &&
+        COMPUTER_TYPES_SET.has(formState.deviceType)
+      ) {
+        try {
+          const allSeats: any[] = await (actor as any).getAllSeats();
+          const matchSeat = allSeats.find(
+            (s: any) =>
+              s.cpuSerial === device.serialNumber ||
+              s.monitorSerial === device.serialNumber ||
+              (device.deviceType === "Micro Computer" &&
+                (s.cpuSerial === device.cpuSerialNumber ||
+                  s.cpuSerial === device.serialNumber)),
+          );
+          if (matchSeat) {
+            await (actor as any).updateSeat({
+              ...matchSeat,
+              seatNumber: formState.seatNumber.trim(),
+            });
+          } else if (resolvedSectionId) {
+            const isMC = device.deviceType === "Micro Computer";
+            const isMonitor = device.deviceType === "Monitor";
+            await (actor as any).createSeat({
+              id: crypto.randomUUID(),
+              sectionId: resolvedSectionId,
+              seatNumber: formState.seatNumber.trim(),
+              currentUser: "",
+              cpuSerial: isMonitor
+                ? ""
+                : isMC
+                  ? device.cpuSerialNumber || device.serialNumber
+                  : device.serialNumber,
+              monitorSerial: isMonitor
+                ? device.serialNumber
+                : isMC
+                  ? device.monitorSerialNumber || ""
+                  : "",
+              ip1: formState.ipAddress || "",
+              ip2: "",
+              remarks: "",
+              createdAt: BigInt(Date.now()),
+            });
+          }
+          queryClient.invalidateQueries({ queryKey: ["seats"] });
+          queryClient.invalidateQueries({ queryKey: ["computers"] });
+        } catch (e) {
+          console.warn("seatNumber update failed:", e);
+        }
       }
       // If section was removed and device was computer type, delete seat
       if (
@@ -1227,39 +1299,47 @@ export default function StockData() {
               </Select>
             </div>
 
-            {/* Serial Number */}
-            <div className="col-span-2 space-y-1">
-              <Label>Serial Number *</Label>
-              <Input
-                value={formState.serialNumber}
-                onChange={(e) =>
-                  setFormState((p) => ({ ...p, serialNumber: e.target.value }))
-                }
-                placeholder="Unique serial number"
-                disabled={!!editingDevice}
-                data-ocid="stock.input"
-              />
-            </div>
+            {/* Serial Number — hidden for Micro Computer (uses CPU SN as identifier) */}
+            {formState.deviceType !== "Micro Computer" ? (
+              <div className="col-span-2 space-y-1">
+                <Label>Serial Number *</Label>
+                <Input
+                  value={formState.serialNumber}
+                  onChange={(e) =>
+                    setFormState((p) => ({
+                      ...p,
+                      serialNumber: e.target.value,
+                    }))
+                  }
+                  placeholder="Unique serial number"
+                  disabled={!!editingDevice}
+                  data-ocid="stock.input"
+                />
+              </div>
+            ) : (
+              <div className="col-span-2 rounded-md bg-muted/50 border border-border px-3 py-2 text-xs text-muted-foreground">
+                ℹ️ Micro Computers are identified by their CPU Serial Number — no
+                separate serial number needed.
+              </div>
+            )}
 
             {/* CPU / Monitor Serial Numbers — only for Micro Computer */}
             {formState.deviceType === "Micro Computer" && (
               <>
-                <div className="col-span-2">
-                  <p className="text-xs text-muted-foreground italic mb-2">
-                    Used for Micro Computer component tracking
-                  </p>
-                </div>
                 <div className="space-y-1">
-                  <Label>CPU Serial Number</Label>
+                  <Label>CPU Serial Number *</Label>
                   <Input
                     value={formState.cpuSerialNumber}
                     onChange={(e) =>
                       setFormState((p) => ({
                         ...p,
                         cpuSerialNumber: e.target.value,
+                        // keep serialNumber in sync so save works
+                        serialNumber: e.target.value,
                       }))
                     }
-                    placeholder="CPU S/N"
+                    placeholder="CPU S/N (used as identifier)"
+                    disabled={!!editingDevice}
                     data-ocid="stock.input"
                   />
                 </div>
@@ -1309,6 +1389,23 @@ export default function StockData() {
                 ))}
               </datalist>
             </div>
+
+            {/* Seat Number — only for computer types */}
+            {["CPU", "Monitor", "Micro Computer", "All-in-One PC"].includes(
+              formState.deviceType,
+            ) && (
+              <div className="space-y-1">
+                <Label>Seat Number</Label>
+                <Input
+                  value={formState.seatNumber}
+                  onChange={(e) =>
+                    setFormState((p) => ({ ...p, seatNumber: e.target.value }))
+                  }
+                  placeholder="e.g. 1, SO, CA"
+                  data-ocid="stock.input"
+                />
+              </div>
+            )}
 
             {/* IP Address */}
             <div className="space-y-1">
