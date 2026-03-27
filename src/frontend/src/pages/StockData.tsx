@@ -548,6 +548,15 @@ export default function StockData() {
       ...existingSeats.map((s: any) => s.monitorSerial).filter(Boolean),
     ]);
 
+    // Pre-fetch all current devices to preserve existing deviceType (BUG 1 fix)
+    let allCurrentDevices: any[] = [];
+    try {
+      allCurrentDevices = await (actor as any).getAllDevices();
+    } catch (_) {}
+    const existingDeviceMap = new Map<string, any>(
+      allCurrentDevices.map((d: any) => [d.serialNumber, d]),
+    );
+
     for (let i = 0; i < csvRows.length; i++) {
       const row = csvRows[i];
       try {
@@ -556,12 +565,29 @@ export default function StockData() {
         const rowSerial =
           row.serialNumber ||
           (row.deviceType === "Micro Computer" ? row.cpuSerialNumber : "");
+
+        // Preserve existing deviceType — once "Micro Computer", always "Micro Computer"
+        const existingDev = existingDeviceMap.get(rowSerial);
+        const preservedDeviceType =
+          existingDev && row.deviceType !== "Micro Computer"
+            ? existingDev.deviceType
+            : row.deviceType || "CPU";
+        const preservedCpuSN =
+          existingDev?.cpuSerialNumber && row.deviceType !== "Micro Computer"
+            ? existingDev.cpuSerialNumber
+            : (row.cpuSerialNumber ?? "");
+        const preservedMonitorSN =
+          existingDev?.monitorSerialNumber &&
+          row.deviceType !== "Micro Computer"
+            ? existingDev.monitorSerialNumber
+            : (row.monitorSerialNumber ?? "");
+
         const device: any = {
           id: rowSerial,
           serialNumber: rowSerial,
-          deviceType: row.deviceType || "CPU",
-          cpuSerialNumber: row.cpuSerialNumber ?? "",
-          monitorSerialNumber: row.monitorSerialNumber ?? "",
+          deviceType: preservedDeviceType,
+          cpuSerialNumber: preservedCpuSN,
+          monitorSerialNumber: preservedMonitorSN,
           makeAndModel: row.makeAndModel,
           companyName: row.makeAndModel,
           amcTeam: row.amcTeam,

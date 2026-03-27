@@ -305,6 +305,14 @@ export default function Computers() {
     const sectionMap = new Map<string, string>(
       sections.map((s) => [s.name.toLowerCase(), s.id]),
     );
+    // Pre-fetch all devices once for Stock-First check (BUG 5 fix)
+    let allDeviceSerials = new Set<string>();
+    try {
+      const allDevs: any[] = await (actor as any).getAllDevices();
+      allDeviceSerials = new Set(
+        allDevs.map((d: any) => d.serialNumber).filter(Boolean),
+      );
+    } catch (_) {}
     let successes = 0;
     let errors = 0;
     for (let i = 0; i < importRows.length; i++) {
@@ -328,6 +336,58 @@ export default function Computers() {
           errors++;
           setImportProgress(Math.round(((i + 1) / importRows.length) * 100));
           continue;
+        }
+        // Stock-First: ensure CPU serial exists in Stock
+        if (row.cpuSerial && !allDeviceSerials.has(row.cpuSerial)) {
+          try {
+            await (actor as any).createDevice({
+              id: row.cpuSerial,
+              serialNumber: row.cpuSerial,
+              deviceType: "CPU",
+              cpuSerialNumber: "",
+              monitorSerialNumber: "",
+              makeAndModel: "",
+              companyName: "",
+              amcTeam: "",
+              amcStartDate: BigInt(0),
+              amcExpiryDate: BigInt(0),
+              assignedSeatId: "",
+              sectionId,
+              workingStatus: "Working",
+              ipAddress: row.ip1 || "",
+              remarks: "",
+              previousSection: "",
+              dateMovedToStandby: BigInt(0),
+              createdAt: BigInt(Date.now()),
+            });
+            allDeviceSerials.add(row.cpuSerial);
+          } catch (_) {}
+        }
+        // Stock-First: ensure Monitor serial exists in Stock
+        if (row.monitorSerial && !allDeviceSerials.has(row.monitorSerial)) {
+          try {
+            await (actor as any).createDevice({
+              id: row.monitorSerial,
+              serialNumber: row.monitorSerial,
+              deviceType: "Monitor",
+              cpuSerialNumber: "",
+              monitorSerialNumber: "",
+              makeAndModel: "",
+              companyName: "",
+              amcTeam: "",
+              amcStartDate: BigInt(0),
+              amcExpiryDate: BigInt(0),
+              assignedSeatId: "",
+              sectionId,
+              workingStatus: "Working",
+              ipAddress: "",
+              remarks: "",
+              previousSection: "",
+              dateMovedToStandby: BigInt(0),
+              createdAt: BigInt(Date.now()),
+            });
+            allDeviceSerials.add(row.monitorSerial);
+          } catch (_) {}
         }
         await createSeat.mutateAsync({
           id: crypto.randomUUID(),
@@ -375,6 +435,16 @@ export default function Computers() {
     const result: SystemRow[] = [];
 
     for (const row of rows) {
+      // Micro Computers are always preserved as-is, never merged
+      if (row.systemType === "Micro Computer") {
+        const key = row.cpuSerial || row.seatId;
+        if (!seenCpu.has(key)) {
+          seenCpu.add(key);
+          if (row.monitorSerial) seenMonitor.add(row.monitorSerial);
+          result.push(row);
+        }
+        continue;
+      }
       // Skip if CPU serial already represented in another row
       if (row.cpuSerial && seenCpu.has(row.cpuSerial)) continue;
       // Skip if monitor-only row whose serial is already represented
@@ -415,21 +485,29 @@ export default function Computers() {
     return result;
   }
 
+  // Build Micro Computer lookup map once (BUG 2 fix)
+  const microComputersByCpuSN = new Map(
+    devices
+      .filter((d) => d.deviceType === "Micro Computer")
+      .flatMap((d) => {
+        const entries: [string, typeof d][] = [];
+        if (d.cpuSerialNumber) entries.push([d.cpuSerialNumber, d]);
+        if (d.serialNumber) entries.push([d.serialNumber, d]);
+        return entries;
+      }),
+  );
+
   const systemRows: SystemRow[] = mergeAndDedup(
     seats.map((seat) => {
       const cpuDev = deviceBySerial.get(seat.cpuSerial);
       const monitorDev = deviceBySerial.get(seat.monitorSerial);
 
-      // Determine system type — also search for Micro Computer by component serial
+      // Robust Micro Computer detection using pre-built map
       const microDev =
-        cpuDev?.deviceType === "Micro Computer"
-          ? cpuDev
-          : devices.find(
-              (d) =>
-                d.deviceType === "Micro Computer" &&
-                (d.cpuSerialNumber === seat.cpuSerial ||
-                  d.serialNumber === seat.cpuSerial),
-            );
+        (cpuDev?.deviceType === "Micro Computer" ? cpuDev : null) ||
+        microComputersByCpuSN.get(seat.cpuSerial) ||
+        microComputersByCpuSN.get(seat.monitorSerial) ||
+        null;
 
       let systemType = "Desktop";
       let cpuSerial = seat.cpuSerial;
@@ -511,8 +589,8 @@ export default function Computers() {
       sectionId: seat.sectionId,
       seatNumber: seat.seatNumber,
       currentUser: seat.currentUser,
-      cpuSerial: seat.cpuSerial,
-      monitorSerial: seat.monitorSerial,
+      cpuSerial: row.cpuSerial || seat.cpuSerial,
+      monitorSerial: row.monitorSerial || seat.monitorSerial,
       ip1: seat.ip1,
       ip2: seat.ip2,
       remarks: seat.remarks,
@@ -538,6 +616,67 @@ export default function Computers() {
       createdAt: editingSeat?.createdAt ?? BigInt(Date.now()),
     };
     try {
+      // Stock-First: ensure CPU serial exists in Stock (BUG 4 fix)
+      if (
+        form.cpuSerial &&
+        !devices.find((d) => d.serialNumber === form.cpuSerial)
+      ) {
+        try {
+          await (actor as any).createDevice({
+            id: form.cpuSerial,
+            serialNumber: form.cpuSerial,
+            deviceType: "CPU",
+            cpuSerialNumber: "",
+            monitorSerialNumber: "",
+            makeAndModel: "",
+            companyName: "",
+            amcTeam: "",
+            amcStartDate: BigInt(0),
+            amcExpiryDate: BigInt(0),
+            assignedSeatId: "",
+            sectionId: form.sectionId,
+            workingStatus: "Working",
+            ipAddress: form.ip1 || "",
+            remarks: "",
+            previousSection: "",
+            dateMovedToStandby: BigInt(0),
+            createdAt: BigInt(Date.now()),
+          });
+        } catch (_) {
+          /* already exists */
+        }
+      }
+      // Stock-First: ensure Monitor serial exists in Stock
+      if (
+        form.monitorSerial &&
+        !devices.find((d) => d.serialNumber === form.monitorSerial)
+      ) {
+        try {
+          await (actor as any).createDevice({
+            id: form.monitorSerial,
+            serialNumber: form.monitorSerial,
+            deviceType: "Monitor",
+            cpuSerialNumber: "",
+            monitorSerialNumber: "",
+            makeAndModel: "",
+            companyName: "",
+            amcTeam: "",
+            amcStartDate: BigInt(0),
+            amcExpiryDate: BigInt(0),
+            assignedSeatId: "",
+            sectionId: form.sectionId,
+            workingStatus: "Working",
+            ipAddress: "",
+            remarks: "",
+            previousSection: "",
+            dateMovedToStandby: BigInt(0),
+            createdAt: BigInt(Date.now()),
+          });
+        } catch (_) {
+          /* already exists */
+        }
+      }
+
       if (editingSeat) {
         await updateSeat.mutateAsync(seatData);
         toast.success("Seat updated");
