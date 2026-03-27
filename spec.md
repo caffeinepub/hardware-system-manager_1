@@ -1,24 +1,29 @@
 # Hardware System Manager
 
 ## Current State
-- Computers page builds `systemRows` from seats + devices; detects system type by checking `deviceBySerial.get(seat.cpuSerial).deviceType`. For Micro Computers, the seat stores `cpuSerial = cpuSerialNumber` (the component serial), not the Micro Computer device's own serial, so `cpuDev` is null/CPU and systemType defaults to "Desktop".
-- Stock page form has no `seatNumber` field; the auto-created seat always has an empty seat number.
-- Computers page add/edit dialog has plain text inputs for CPU Serial and Monitor Serial — no dropdown of available standby devices.
+- Stock import creates one Seat per imported device (CPU and Monitor each get their own Seat record)
+- Computers page builds `systemRows` by mapping 1:1 over Seat records — no deduplication or merging step
+- When seat number is added via Stock edit, `autoCreateSeat` may create a second Seat if the match logic misses, resulting in a new row instead of updating the existing one
+- A CPU row and a Monitor row with the same section+seatNumber are never merged — they display as two separate rows
 
 ## Requested Changes (Diff)
 
 ### Add
-- `seatNumber` field in Stock page form (visible for computer-type devices: CPU, Monitor, Micro Computer, All-in-One PC). When saving, if seatNumber is provided and device is a computer type, also upsert the seat record with that seat number.
-- In Computers page add/edit dialog: replace CPU Serial and Monitor Serial plain text inputs with `<Select>` dropdowns showing standby devices (unassigned CPUs and Monitors — devices where `sectionId === ""` and `deviceType === "CPU"` or `"Monitor"`). Each option shows `SerialNumber — Make/Model`. Also include a free-type option or fallback input for manual entry.
+- Deduplication step in Computers page `systemRows` build: after mapping seats → rows, merge any two rows that share the same `sectionId` + `seatNumber` (non-empty) into one combined CPU+Monitor row
+- Serial-level dedup guard: track seen serials; skip any row whose CPU or Monitor serial was already rendered
 
 ### Modify
-- `systemRows` in Computers.tsx: after getting `cpuDev = deviceBySerial.get(seat.cpuSerial)`, also look for a Micro Computer device in `devices` array where `d.cpuSerialNumber === seat.cpuSerial`. If found, use that as the definitive Micro Computer device (set `systemType = "Micro Computer"`, use its `monitorSerialNumber` for monitor serial, its `makeAndModel` for model).
-- The standby check for dropdown: a device is "available/standby" if its `sectionId` is empty string or falsy AND `deviceType` is CPU or Monitor. The currently-assigned serials (being edited) should also appear in the dropdown so the user can keep them.
+- **StockData.tsx `handleImport`**: when creating a seat for a CPU or Monitor that has a `seatNumber`, first check if a seat already exists in the same section with that seatNumber — if yes, merge the device into that seat (updateSeat) instead of creating a new one
+- **StockData.tsx `handleImport`**: when creating a seat with no seat number, also check if there is an existing seat in the same section with an empty slot (no cpu/monitor) — merge instead of creating new
+- **StockData.tsx `handleSaveEntry` seatNumber block**: when the user assigns a seat number to a device that already has a Seat record (blank seatNumber), find that existing Seat and update it — never create a second Seat for a device that already has one
+- **Computers.tsx `systemRows` build**: apply merging + dedup post-processing step before grouping/sorting
+- Micro Computer seats: ensure the Seat is never duplicated; the Micro Computer device (identified by its CPU serial number) should always map to exactly one row
 
 ### Remove
-- Nothing removed.
+- Nothing removed
 
 ## Implementation Plan
-1. **Computers.tsx — fix Micro Computer detection in `systemRows`**: In the map over seats, after `cpuDev = deviceBySerial.get(seat.cpuSerial)`, add a lookup: `const microDev = cpuDev?.deviceType === 'Micro Computer' ? cpuDev : devices.find(d => d.deviceType === 'Micro Computer' && d.cpuSerialNumber === seat.cpuSerial)`. If `microDev` exists, set systemType to Micro Computer and pull serials/model from it.
-2. **Computers.tsx — standby dropdown in Add/Edit dialog**: Compute a list of standby CPUs and standby Monitors from `devices` (those with empty `sectionId`). In the dialog, replace the CPU Serial `<Input>` with a `<Select>` whose items are standby CPUs plus the current seat's cpuSerial if assigned. Same for Monitor Serial. Add a `"Manual entry"` option that shows a text input fallback (or just a combobox pattern with a typed-in value option).
-3. **StockData.tsx — add seatNumber field**: Add `seatNumber: string` to `FormState` and `EMPTY_FORM`. Show a `Seat Number` `<Input>` in the dialog when `formState.deviceType` is a computer type. In `handleSaveEntry`, after creating/updating the device, if `formState.seatNumber.trim()` is set and device is computer type, look for an existing seat that contains this serial; if found update its seatNumber, else create/update via the same logic as `autoCreateSeat` but passing `seatNumber`.
+1. Fix `handleImport` in StockData.tsx: before calling `createSeat` for a device, check existing seats for same section+seatNumber to merge; also check for a seat with a matching empty slot in the same section
+2. Fix `handleSaveEntry` seatNumber block: when `matchSeat` is not found by serial, also search by `sectionId + seatNumber` before falling back to `createSeat`
+3. Fix `Computers.tsx` `systemRows` post-processing: add `mergeAndDedup(rows)` function that merges rows sharing the same section+seatNumber and deduplicates by serial
+4. Ensure Micro Computer rows are always treated as a single unit with no duplicate seat creation

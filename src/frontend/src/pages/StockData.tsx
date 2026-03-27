@@ -584,12 +584,8 @@ export default function StockData() {
           await (actor as any).createDevice(device);
         }
 
-        // Auto-create seat for computer types with section
-        if (
-          sectionId &&
-          COMPUTER_TYPES_SET.has(row.deviceType) &&
-          !seatedSerials.has(rowSerial)
-        ) {
+        // Auto-create/merge seat for computer types with section
+        if (sectionId && COMPUTER_TYPES_SET.has(row.deviceType)) {
           let cpuSerial = "";
           let monitorSerial = "";
           if (row.deviceType === "Monitor") {
@@ -600,22 +596,88 @@ export default function StockData() {
           } else {
             cpuSerial = rowSerial;
           }
-          try {
-            await (actor as any).createSeat({
-              id: crypto.randomUUID(),
-              sectionId,
-              seatNumber: "",
-              currentUser: "",
-              cpuSerial,
-              monitorSerial,
-              ip1: row.ipAddress || "",
-              ip2: "",
-              remarks: "",
-              createdAt: BigInt(Date.now()),
-            });
-            seatedSerials.add(rowSerial);
-          } catch (se) {
-            console.warn("Auto-seat creation failed:", se);
+
+          // Skip if this serial is already seated
+          if (!seatedSerials.has(rowSerial)) {
+            const rowSeatNum = (row as any).seatNumber?.trim() || "";
+            let merged = false;
+
+            // Step 1: If seatNumber provided, find existing seat with same sectionId + seatNumber
+            if (rowSeatNum) {
+              const sameSlot = existingSeats.find(
+                (s: any) =>
+                  s.sectionId === sectionId && s.seatNumber === rowSeatNum,
+              );
+              if (sameSlot) {
+                const updated = { ...sameSlot };
+                if (cpuSerial && !updated.cpuSerial)
+                  updated.cpuSerial = cpuSerial;
+                if (monitorSerial && !updated.monitorSerial)
+                  updated.monitorSerial = monitorSerial;
+                try {
+                  await (actor as any).updateSeat(updated);
+                  existingSeats = existingSeats.map((s: any) =>
+                    s.id === updated.id ? updated : s,
+                  );
+                  seatedSerials.add(rowSerial);
+                  merged = true;
+                } catch (se) {
+                  console.warn("Seat merge (seatNumber) failed:", se);
+                }
+              }
+            }
+
+            // Step 2: Find an unseated slot in same section where device fits
+            if (!merged) {
+              const openSlot = existingSeats.find((s: any) => {
+                if (s.sectionId !== sectionId) return false;
+                if (cpuSerial && !s.cpuSerial) return true;
+                if (monitorSerial && !s.monitorSerial) return true;
+                return false;
+              });
+              if (openSlot) {
+                const updated = { ...openSlot };
+                if (cpuSerial && !updated.cpuSerial)
+                  updated.cpuSerial = cpuSerial;
+                if (monitorSerial && !updated.monitorSerial)
+                  updated.monitorSerial = monitorSerial;
+                if (rowSeatNum && !updated.seatNumber)
+                  updated.seatNumber = rowSeatNum;
+                try {
+                  await (actor as any).updateSeat(updated);
+                  existingSeats = existingSeats.map((s: any) =>
+                    s.id === updated.id ? updated : s,
+                  );
+                  seatedSerials.add(rowSerial);
+                  merged = true;
+                } catch (se) {
+                  console.warn("Seat merge (open slot) failed:", se);
+                }
+              }
+            }
+
+            // Step 3: No merge possible — create new seat
+            if (!merged) {
+              try {
+                const newSeat = {
+                  id: crypto.randomUUID(),
+                  sectionId,
+                  seatNumber: rowSeatNum,
+                  currentUser: "",
+                  cpuSerial,
+                  monitorSerial,
+                  ip1: row.ipAddress || "",
+                  ip2: "",
+                  remarks: "",
+                  createdAt: BigInt(Date.now()),
+                };
+                await (actor as any).createSeat(newSeat);
+                existingSeats.push(newSeat);
+                seatedSerials.add(rowSerial);
+              } catch (se) {
+                console.warn("Auto-seat creation failed:", se);
+              }
+            }
           }
         }
 
@@ -817,19 +879,45 @@ export default function StockData() {
       ) {
         try {
           const allSeats: any[] = await (actor as any).getAllSeats();
-          const matchSeat = allSeats.find(
-            (s: any) =>
-              s.cpuSerial === device.serialNumber ||
-              s.monitorSerial === device.serialNumber ||
-              (device.deviceType === "Micro Computer" &&
-                (s.cpuSerial === device.cpuSerialNumber ||
-                  s.cpuSerial === device.serialNumber)),
-          );
+          const matchSeat =
+            allSeats.find(
+              (s: any) =>
+                s.cpuSerial === device.serialNumber ||
+                s.monitorSerial === device.serialNumber ||
+                (device.deviceType === "Micro Computer" &&
+                  (s.cpuSerial === device.cpuSerialNumber ||
+                    s.cpuSerial === device.serialNumber)),
+            ) ??
+            // Fallback: find seat with same section + seatNumber to merge into
+            allSeats.find(
+              (s: any) =>
+                s.sectionId === resolvedSectionId &&
+                s.seatNumber === formState.seatNumber.trim(),
+            );
           if (matchSeat) {
-            await (actor as any).updateSeat({
+            const updatedSeat: any = {
               ...matchSeat,
               seatNumber: formState.seatNumber.trim(),
-            });
+            };
+            // Also fill in device serial if slot is empty
+            if (device.deviceType === "Monitor" && !updatedSeat.monitorSerial) {
+              updatedSeat.monitorSerial = device.serialNumber;
+            } else if (
+              device.deviceType !== "Monitor" &&
+              !updatedSeat.cpuSerial
+            ) {
+              updatedSeat.cpuSerial =
+                device.deviceType === "Micro Computer"
+                  ? device.cpuSerialNumber || device.serialNumber
+                  : device.serialNumber;
+              if (
+                device.deviceType === "Micro Computer" &&
+                !updatedSeat.monitorSerial
+              ) {
+                updatedSeat.monitorSerial = device.monitorSerialNumber || "";
+              }
+            }
+            await (actor as any).updateSeat(updatedSeat);
           } else if (resolvedSectionId) {
             const isMC = device.deviceType === "Micro Computer";
             const isMonitor = device.deviceType === "Monitor";

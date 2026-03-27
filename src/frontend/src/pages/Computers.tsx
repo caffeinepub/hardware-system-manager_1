@@ -368,51 +368,100 @@ export default function Computers() {
   // ─── Build system rows from Seat + Device data ───────────────────────────────
   const deviceBySerial = new Map(devices.map((d) => [d.serialNumber, d]));
 
-  const systemRows: SystemRow[] = seats.map((seat) => {
-    const cpuDev = deviceBySerial.get(seat.cpuSerial);
-    const monitorDev = deviceBySerial.get(seat.monitorSerial);
+  function mergeAndDedup(rows: SystemRow[]): SystemRow[] {
+    const seenCpu = new Set<string>();
+    const seenMonitor = new Set<string>();
+    const seatGroupMap = new Map<string, SystemRow>();
+    const result: SystemRow[] = [];
 
-    // Determine system type — also search for Micro Computer by component serial
-    const microDev =
-      cpuDev?.deviceType === "Micro Computer"
-        ? cpuDev
-        : devices.find(
-            (d) =>
-              d.deviceType === "Micro Computer" &&
-              (d.cpuSerialNumber === seat.cpuSerial ||
-                d.serialNumber === seat.cpuSerial),
-          );
+    for (const row of rows) {
+      // Skip if CPU serial already represented in another row
+      if (row.cpuSerial && seenCpu.has(row.cpuSerial)) continue;
+      // Skip if monitor-only row whose serial is already represented
+      if (
+        row.monitorSerial &&
+        seenMonitor.has(row.monitorSerial) &&
+        row.systemType !== "Micro Computer" &&
+        !row.cpuSerial
+      )
+        continue;
 
-    let systemType = "Desktop";
-    let cpuSerial = seat.cpuSerial;
-    let monitorSerial = seat.monitorSerial;
-    let cpuModel = cpuDev?.makeAndModel ?? "";
-    const monitorModel = monitorDev?.makeAndModel ?? "";
+      // For rows with seatNumber, try to merge with existing row of same section+seat
+      if (row.seatNumber && row.systemType !== "Micro Computer") {
+        const key = `${row.sectionId}||${row.seatNumber}`;
+        const existing = seatGroupMap.get(key);
+        if (existing) {
+          if (!existing.cpuSerial && row.cpuSerial) {
+            existing.cpuSerial = row.cpuSerial;
+            existing.cpuModel = row.cpuModel;
+            existing.systemType = "Desktop";
+          }
+          if (!existing.monitorSerial && row.monitorSerial) {
+            existing.monitorSerial = row.monitorSerial;
+            existing.monitorModel = row.monitorModel;
+          }
+          if (row.cpuSerial) seenCpu.add(row.cpuSerial);
+          if (row.monitorSerial) seenMonitor.add(row.monitorSerial);
+          continue;
+        }
+        seatGroupMap.set(key, row);
+      }
 
-    if (microDev) {
-      systemType = "Micro Computer";
-      cpuSerial = microDev.cpuSerialNumber || seat.cpuSerial;
-      monitorSerial = microDev.monitorSerialNumber || seat.monitorSerial;
-      cpuModel = microDev.makeAndModel;
-    } else if (cpuDev?.deviceType === "All-in-One PC") {
-      systemType = "All-in-One PC";
+      if (row.cpuSerial) seenCpu.add(row.cpuSerial);
+      if (row.monitorSerial) seenMonitor.add(row.monitorSerial);
+      result.push(row);
     }
 
-    return {
-      seatId: seat.id,
-      seatNumber: seat.seatNumber,
-      currentUser: seat.currentUser,
-      sectionId: seat.sectionId,
-      systemType,
-      cpuSerial,
-      cpuModel,
-      monitorSerial,
-      monitorModel,
-      ip1: seat.ip1,
-      ip2: seat.ip2,
-      remarks: seat.remarks,
-    };
-  });
+    return result;
+  }
+
+  const systemRows: SystemRow[] = mergeAndDedup(
+    seats.map((seat) => {
+      const cpuDev = deviceBySerial.get(seat.cpuSerial);
+      const monitorDev = deviceBySerial.get(seat.monitorSerial);
+
+      // Determine system type — also search for Micro Computer by component serial
+      const microDev =
+        cpuDev?.deviceType === "Micro Computer"
+          ? cpuDev
+          : devices.find(
+              (d) =>
+                d.deviceType === "Micro Computer" &&
+                (d.cpuSerialNumber === seat.cpuSerial ||
+                  d.serialNumber === seat.cpuSerial),
+            );
+
+      let systemType = "Desktop";
+      let cpuSerial = seat.cpuSerial;
+      let monitorSerial = seat.monitorSerial;
+      let cpuModel = cpuDev?.makeAndModel ?? "";
+      const monitorModel = monitorDev?.makeAndModel ?? "";
+
+      if (microDev) {
+        systemType = "Micro Computer";
+        cpuSerial = microDev.cpuSerialNumber || seat.cpuSerial;
+        monitorSerial = microDev.monitorSerialNumber || seat.monitorSerial;
+        cpuModel = microDev.makeAndModel;
+      } else if (cpuDev?.deviceType === "All-in-One PC") {
+        systemType = "All-in-One PC";
+      }
+
+      return {
+        seatId: seat.id,
+        seatNumber: seat.seatNumber,
+        currentUser: seat.currentUser,
+        sectionId: seat.sectionId,
+        systemType,
+        cpuSerial,
+        cpuModel,
+        monitorSerial,
+        monitorModel,
+        ip1: seat.ip1,
+        ip2: seat.ip2,
+        remarks: seat.remarks,
+      };
+    }),
+  );
 
   // ─── Group and sort ───────────────────────────────────────────────────────────
   const grouped = systemRows.reduce<Record<string, SystemRow[]>>((acc, row) => {
