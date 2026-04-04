@@ -1,11 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   AlertTriangle,
-  ArrowRight,
   Building2,
   CalendarClock,
   CalendarX2,
@@ -307,17 +305,11 @@ export default function Dashboard() {
     return { pending, cleared, longPending, total: complaints.length };
   }, [complaints]);
 
-  const navigate = useNavigate();
-
   // ── Attention items ─────────────────────────────────────────────────────────
   // Bug 4 fixed: show actual expiry dates and pending days in detail
   const attentionItems = useMemo(() => {
-    const items: {
-      label: string;
-      detail: string;
-      type: "red" | "orange";
-      navigateTo: string;
-    }[] = [];
+    const items: { label: string; detail: string; type: "red" | "orange" }[] =
+      [];
     const now = Date.now();
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
 
@@ -340,7 +332,6 @@ export default function Dashboard() {
         label: `${expiredDevices.length} device(s) with Expired AMC`,
         detail: `Expired: ${sample.join(", ")}${expiredDevices.length > 3 ? " ..." : ""}`,
         type: "red",
-        navigateTo: "/stock",
       });
     }
 
@@ -363,7 +354,6 @@ export default function Dashboard() {
         label: `${expiringSoonDevices.length} device(s) AMC expiring within 30 days`,
         detail: `Expiring: ${sample.join(", ")}${expiringSoonDevices.length > 3 ? " ..." : ""}`,
         type: "orange",
-        navigateTo: "/stock",
       });
     }
 
@@ -380,7 +370,6 @@ export default function Dashboard() {
             .filter(Boolean)
             .join(", ") || "See Stock page",
         type: "orange",
-        navigateTo: "/stock",
       });
 
     // Long pending complaints — show max pending days
@@ -404,7 +393,6 @@ export default function Dashboard() {
         label: `${complaintMetrics.longPending} complaint(s) pending > 7 days`,
         detail: `Longest pending: ${maxDays} days — follow up with AMC team`,
         type: "orange",
-        navigateTo: "/complaints",
       });
     }
 
@@ -420,7 +408,6 @@ export default function Dashboard() {
         label: `${noSection.length} computer device(s) without Section`,
         detail: "Assign to a section or mark standby",
         type: "orange",
-        navigateTo: "/stock",
       });
     // Seats with missing CPU or Monitor pair
     const missingPair = seats.filter((s) => {
@@ -431,7 +418,6 @@ export default function Dashboard() {
     if (missingPair.length > 0)
       items.push({
         label: `${missingPair.length} seat(s) with missing CPU/Monitor pair`,
-        navigateTo: "/computers",
         detail: "Check Computers page for incomplete systems",
         type: "orange",
       });
@@ -560,16 +546,14 @@ export default function Dashboard() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {attentionItems.map((item) => (
-                  <button
+                  <div
                     key={item.label}
-                    type="button"
-                    onClick={() => navigate({ to: item.navigateTo })}
-                    className={`flex items-start gap-3 p-3 rounded-lg text-left w-full transition-opacity hover:opacity-80 cursor-pointer ${item.type === "red" ? "bg-red-100 border border-red-200" : "bg-orange-50 border border-orange-200"}`}
+                    className={`flex items-start gap-3 p-3 rounded-lg ${item.type === "red" ? "bg-red-100 border border-red-200" : "bg-orange-50 border border-orange-200"}`}
                   >
                     <AlertTriangle
                       className={`w-4 h-4 mt-0.5 flex-shrink-0 ${item.type === "red" ? "text-red-600" : "text-orange-500"}`}
                     />
-                    <div className="flex-1 min-w-0">
+                    <div>
                       <p
                         className={`text-sm font-semibold ${item.type === "red" ? "text-red-700" : "text-orange-700"}`}
                       >
@@ -579,10 +563,7 @@ export default function Dashboard() {
                         {item.detail}
                       </p>
                     </div>
-                    <ArrowRight
-                      className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${item.type === "red" ? "text-red-400" : "text-orange-400"}`}
-                    />
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
